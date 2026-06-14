@@ -1,6 +1,6 @@
 # Makefile for go_wasm_lib2 - Generic WASM HTTP SDK Generator
 
-.PHONY: build build-tinygo build-all clean test deps
+.PHONY: build build-tinygo build-all clean test deps lint-ts lint-ts-fix
 
 # Default target
 all: build
@@ -39,17 +39,29 @@ test-compile:
 	tinygo build -o /dev/null -target=wasm ./cmd/runtime 2>/dev/null || echo "TinyGo compilation test skipped (not installed)"
 	@echo "Compilation tests passed"
 
+# Lint generated TypeScript files with oxlint
+# Usage: make lint-ts OUT=./output (default: examples/petstore/generated)
+lint-ts:
+	npm install
+	npx oxlint -c oxlintrc.json --no-ignore $(or $(OUT),examples/petstore/generated)
+
+lint-ts-fix:
+	npm install
+	npx oxlint -c oxlintrc.json --no-ignore $(or $(OUT),examples/petstore/generated) --fix
+
 # Generate SDK from OpenAPI spec
 # Usage: make generate SPEC=path/to/openapi.yaml OUT=./output
 generate:
 	@if [ -z "$(SPEC)" ]; then echo "Usage: make generate SPEC=path/to/openapi.yaml [OUT=./output]"; exit 1; fi
 	@mkdir -p $(OUT)
 	go run ./cmd/generator -spec=$(SPEC) -out=$(OUT)
+	$(MAKE) lint-ts OUT=$(OUT)
 
 # Development: run generator with example spec
 dev-generate:
 	@mkdir -p examples/petstore/generated
 	go run ./cmd/generator -spec=examples/petstore/openapi.yaml -out=examples/petstore/generated
+	$(MAKE) lint-ts OUT=examples/petstore/generated
 
 # Install TinyGo (macOS)
 install-tinygo-macos:
@@ -65,6 +77,10 @@ install-tinygo-linux:
 verify-tinygo:
 	tinygo version
 
+# Verify full project
+verify: build test-compile dev-generate
+	@echo "=== All verifications passed ==="
+
 # Help
 help:
 	@echo "Available targets:"
@@ -73,9 +89,12 @@ help:
 	@echo "  build-all      - Build both"
 	@echo "  deps           - Download dependencies"
 	@echo "  clean          - Clean build artifacts"
+	@echo "  lint-ts        - Lint generated TypeScript files with oxlint"
+	@echo "  lint-ts-fix    - Lint and auto-fix generated TypeScript files"
 	@echo "  test-compile   - Test compilation"
 	@echo "  generate       - Generate SDK from OpenAPI spec (SPEC=..., OUT=...)"
 	@echo "  dev-generate   - Generate SDK for petstore example"
+	@echo "  verify         - Full project verification (build, test, generate, lint)"
 	@echo "  install-tinygo-macos - Install TinyGo on macOS"
 	@echo "  install-tinygo-linux - Install TinyGo on Linux"
 	@echo "  verify-tinygo  - Verify TinyGo installation"
