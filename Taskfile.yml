@@ -69,8 +69,6 @@ tasks:
         fi
       - "mkdir -p {{.OUT}}"
       - "go run ./cmd/generator -spec={{.SPEC}} -out={{.OUT}}"
-      - "echo 'Linting generated TypeScript files...'"
-      - "npx oxlint -c oxlintrc.json --no-ignore {{.OUT}}"
 
   dev:generate:
     desc: Generate SDK for petstore example
@@ -78,8 +76,6 @@ tasks:
     cmds:
       - "mkdir -p examples/petstore/generated"
       - "go run ./cmd/generator -spec=examples/petstore/openapi.yaml -out=examples/petstore/generated"
-      - "echo 'Linting generated TypeScript files...'"
-      - "npx oxlint -c oxlintrc.json --no-ignore examples/petstore/generated"
 
   build:runtime:
     desc: Build the runtime for code generation

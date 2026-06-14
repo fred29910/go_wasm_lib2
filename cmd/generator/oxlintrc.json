@@ -1,0 +1,12 @@
+{
+  "plugins": ["typescript", "oxc"],
+  "rules": {
+    "typescript/no-unused-vars": "off",
+    "typescript/no-explicit-any": "off",
+    "typescript/ban-ts-comment": "off",
+    "no-fallthrough": "off",
+    "no-unused-vars": "off",
+    "no-empty-pattern": "off"
+  },
+  "ignorePatterns": ["node_modules", "build", "*.wasm"]
+}

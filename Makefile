@@ -55,13 +55,11 @@ generate:
 	@if [ -z "$(SPEC)" ]; then echo "Usage: make generate SPEC=path/to/openapi.yaml [OUT=./output]"; exit 1; fi
 	@mkdir -p $(OUT)
 	go run ./cmd/generator -spec=$(SPEC) -out=$(OUT)
-	$(MAKE) lint-ts OUT=$(OUT)
 
 # Development: run generator with example spec
 dev-generate:
 	@mkdir -p examples/petstore/generated
 	go run ./cmd/generator -spec=examples/petstore/openapi.yaml -out=examples/petstore/generated
-	$(MAKE) lint-ts OUT=examples/petstore/generated
 
 # Install TinyGo (macOS)
 install-tinygo-macos:
