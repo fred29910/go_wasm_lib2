@@ -5,16 +5,18 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"strconv"
 	"syscall/js"
 )
 
 // WASMExports holds the exported functions for JavaScript
 type WASMExports struct {
-	client   *HTTPClient
-	promise  *PromiseHelper
-	converter *Converter
+	client      *HTTPClient
+	promise     *PromiseHelper
+	converter   *Converter
 	initialized bool
+	mu          sync.RWMutex
 }
 
 // NewWASMExports creates a new exports handler
@@ -40,6 +42,9 @@ func (e *WASMExports) ExportFunctions() {
 func (e *WASMExports) initClient(this js.Value, args []js.Value) interface{} {
 	return e.promise.CreatePromise(func(resolve, reject js.Value) {
 		go func() {
+			e.mu.Lock()
+			defer e.mu.Unlock()
+			
 			if len(args) < 1 || args[0].Type() == js.TypeUndefined || args[0].Type() == js.TypeNull {
 				e.promise.RejectPromise(reject, NewError(ErrCodeInvalidConfig, "Expected config object", ""))
 				return
@@ -72,7 +77,7 @@ func (e *WASMExports) initClient(this js.Value, args []js.Value) interface{} {
 					}
 				}
 			}
-
+			
 			// Create client
 			e.client = NewHTTPClient(config)
 			e.initialized = true
@@ -93,7 +98,12 @@ func (e *WASMExports) initClient(this js.Value, args []js.Value) interface{} {
 func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 	return e.promise.CreatePromise(func(resolve, reject js.Value) {
 		go func() {
-			if !e.initialized || e.client == nil {
+			e.mu.RLock()
+			initialized := e.initialized
+			client := e.client
+			e.mu.RUnlock()
+			
+			if !initialized || client == nil {
 				e.promise.RejectPromise(reject, ErrNotInitialized)
 				return
 			}
@@ -114,11 +124,11 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 			} else {
 				req.Method = "GET"
 			}
-
+			
 			if path := reqJS.Get("path"); path.Type() == js.TypeString {
 				req.Path = path.String()
 			}
-
+			
 			if headers := reqJS.Get("headers"); headers.Type() == js.TypeObject {
 				headersMap, err := e.converter.JSValueToMap(headers)
 				if err == nil {
@@ -129,7 +139,7 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 					}
 				}
 			}
-
+			
 			if query := reqJS.Get("query"); query.Type() == js.TypeObject {
 				queryMap, err := e.converter.JSValueToMap(query)
 				if err == nil {
@@ -140,28 +150,28 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 					}
 				}
 			}
-
+			
 			if body := reqJS.Get("body"); body.Type() != js.TypeUndefined && body.Type() != js.TypeNull {
 				// Convert body to Go value
 				bodyVal := e.converter.jsValueToInterface(body)
 				req.Body = bodyVal
 			}
-
+			
 			// Make the call
 			ctx := context.Background()
-			resp, err := e.client.Call(ctx, req)
+			resp, err := client.Call(ctx, req)
 			if err != nil {
 				e.promise.RejectPromise(reject, err)
 				return
 			}
-
+			
 			// Convert response to JS
 			respJS, err := e.converter.GoToJSValue(resp)
 			if err != nil {
 				e.promise.RejectPromise(reject, NewError(ErrCodeSerializationFail, "Failed to serialize response", err.Error()))
 				return
 			}
-
+			
 			e.promise.ResolvePromise(resolve, respJS)
 		}()
 	})
@@ -169,7 +179,12 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 
 // setAuthToken sets the authorization token
 func (e *WASMExports) setAuthToken(this js.Value, args []js.Value) interface{} {
-	if !e.initialized || e.client == nil {
+	e.mu.RLock()
+	initialized := e.initialized
+	client := e.client
+	e.mu.RUnlock()
+
+	if !initialized || client == nil {
 		return map[string]interface{}{
 			"success": false,
 			"error":   ErrNotInitialized.Error(),
@@ -189,7 +204,7 @@ func (e *WASMExports) setAuthToken(this js.Value, args []js.Value) interface{} {
 		scheme = args[1].String()
 	}
 
-	e.client.SetAuthToken(token, scheme)
+	client.SetAuthToken(token, scheme)
 
 	return map[string]interface{}{
 		"success": true,
@@ -198,14 +213,19 @@ func (e *WASMExports) setAuthToken(this js.Value, args []js.Value) interface{} {
 
 // clearAuthToken clears the authorization token
 func (e *WASMExports) clearAuthToken(this js.Value, args []js.Value) interface{} {
-	if !e.initialized || e.client == nil {
+	e.mu.RLock()
+	initialized := e.initialized
+	client := e.client
+	e.mu.RUnlock()
+
+	if !initialized || client == nil {
 		return map[string]interface{}{
 			"success": false,
 			"error":   ErrNotInitialized.Error(),
 		}
 	}
 
-	e.client.ClearAuthToken()
+	client.ClearAuthToken()
 
 	return map[string]interface{}{
 		"success": true,
@@ -214,14 +234,19 @@ func (e *WASMExports) clearAuthToken(this js.Value, args []js.Value) interface{}
 
 // getConfig returns the current client configuration
 func (e *WASMExports) getConfig(this js.Value, args []js.Value) interface{} {
-	if !e.initialized || e.client == nil {
+	e.mu.RLock()
+	initialized := e.initialized
+	client := e.client
+	e.mu.RUnlock()
+
+	if !initialized || client == nil {
 		return map[string]interface{}{
 			"success": false,
 			"error":   ErrNotInitialized.Error(),
 		}
 	}
 
-	config := e.client.GetConfig()
+	config := client.GetConfig()
 	configJS, err := e.converter.GoToJSValue(config)
 	if err != nil {
 		return map[string]interface{}{

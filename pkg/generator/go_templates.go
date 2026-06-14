@@ -71,7 +71,9 @@ type {{.RequestInterface}} struct {
 // ToRequest converts {{.RequestInterface}} to runtime.Request.
 func {{.RequestInterface}}ToRequest(params {{.RequestInterface}}) runtime.Request {
 	pathParams := make(map[string]string)
+{{if .PathParams}}
 {{range .PathParams}}	pathParams["{{.Name}}"] = {{.GoType}}ToString(params.{{.GoName}})
+{{end}}
 {{end}}	return runtime.Request{
 		Method:     "{{.Method}}",
 		Path:       "{{.Path}}",

@@ -192,13 +192,17 @@ export async function {{.TSName}}(params: {{.RequestInterface}}): Promise<HTTPRe
 	const request: HTTPRequest = {
 		method: '{{.Method}}',
 		path: '{{.Path}}',
-{{range .PathParams}}		pathParams: { '{{.Name}}': params.{{.TSName}} },
-{{end}}		headers: params.headers || {},
+		headers: params.headers || {},
 		query: params.query || {},
-{{if .HasBody}}		body: params.body,
-{{end}}	};
+ {{if .PathParams}}
+		pathParams: {
+ {{range .PathParams}}			'{{.Name}}': params.{{.TSName}},
+ {{end}}		},
+ {{end}}
+ {{if .HasBody}}		body: params.body,
+ {{end}}	};
 	return (window as any).wasmCallAPI('{{.ID}}', request);
-}
+ }
 {{end}}
 `
 

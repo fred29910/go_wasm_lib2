@@ -85,7 +85,7 @@ func (g *Generator) buildModel(doc *OpenAPI) GenerationModel {
 			TSName: goName,
 		}
 
-		for _, prop := range sortedSchemaKeys(schema.Properties) {
+		for _, prop := range sortedMapKeys(schema.Properties) {
 			propSchema := schema.Properties[prop]
 			required := contains(schema.Required, prop)
 			s.Properties = append(s.Properties, GeneratedProperty{
@@ -286,7 +286,7 @@ func contains(list []string, item string) bool {
 	return false
 }
 
-func sortedSchemaKeys(m map[string]Schema) []string {
+func sortedMapKeys(m map[string]Schema) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

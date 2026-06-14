@@ -151,7 +151,10 @@ func (c *Converter) interfaceToJSValue(val interface{}) js.Value {
 	case reflect.Slice, reflect.Array:
 		return c.SliceToJSArray(val)
 	case reflect.Map:
-		return c.MapToJSValue(val.(map[string]interface{}))
+		if m, ok := val.(map[string]interface{}); ok {
+			return c.MapToJSValue(m)
+		}
+		return js.Null()
 	case reflect.Struct:
 		return c.structToJSValue(rv)
 	case reflect.Ptr:

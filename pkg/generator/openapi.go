@@ -184,11 +184,3 @@ func (o *OpenAPI) DefaultServer() string {
 	return o.Servers[0].URL
 }
 
-// SchemaRef returns the referenced schema name
-func (o *OpenAPI) SchemaRef(ref string) (string, bool) {
-	prefix := "#/components/schemas/"
-	if !strings.HasPrefix(ref, prefix) {
-		return "", false
-	}
-	return ref[len(prefix):], true
-}
