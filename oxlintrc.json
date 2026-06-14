@@ -1,12 +1,19 @@
 {
   "plugins": ["typescript", "oxc"],
+  "env": {
+    "browser": true,
+    "es2022": true
+  },
   "rules": {
-    "typescript/no-unused-vars": "off",
+    "typescript/no-unused-vars": "warn",
     "typescript/no-explicit-any": "off",
     "typescript/ban-ts-comment": "off",
     "no-fallthrough": "off",
     "no-unused-vars": "off",
-    "no-empty-pattern": "off"
+    "no-empty-pattern": "off",
+    "no-console": "off",
+    "eqeqeq": "warn",
+    "no-var": "warn"
   },
-  "ignorePatterns": ["node_modules", "build", "*.wasm"]
+  "ignorePatterns": ["node_modules", "build", "*.wasm", "generated"]
 }

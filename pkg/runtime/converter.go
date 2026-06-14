@@ -29,6 +29,23 @@ func (c *Converter) GoToJSValue(val interface{}) (js.Value, error) {
 	return v.JSValue(), nil
 }
 
+// dangerousJSKeys are JavaScript property names that could lead to prototype pollution.
+var dangerousJSKeys = map[string]bool{
+	"__proto__":      true,
+	"constructor":   true,
+	"prototype":     true,
+	"__defineGetter__":  true,
+	"__defineSetter__":  true,
+	"__lookupGetter__":  true,
+	"__lookupSetter__":  true,
+	"hasOwnProperty":    true,
+	"isPrototypeOf":     true,
+	"propertyIsEnumerable": true,
+	"toLocaleString":    true,
+	"toString":          true,
+	"valueOf":           true,
+}
+
 // JSValueToMap converts a JavaScript object to a Go map
 func (c *Converter) JSValueToMap(jsVal js.Value) (map[string]interface{}, error) {
 	if jsVal.Type() != js.TypeObject {
@@ -41,6 +58,10 @@ func (c *Converter) JSValueToMap(jsVal js.Value) (map[string]interface{}, error)
 
 	for i := 0; i < length; i++ {
 		key := keys.Index(i).String()
+		// Skip dangerous keys to prevent prototype pollution
+		if dangerousJSKeys[key] {
+			continue
+		}
 		val := jsVal.Get(key)
 		result[key] = c.jsValueToInterface(val)
 	}

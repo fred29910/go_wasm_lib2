@@ -32,8 +32,18 @@ clean:
 	rm -rf build/
 	rm -f *.wasm
 
+# Run Go tests
+test:
+	go test ./...
+	@echo "All tests passed"
+
+# Run go vet
+vet:
+	go vet ./...
+	@echo "go vet passed"
+
 # Test compilation (without running)
-test-compile:
+ntest-compile:
 	GOOS=js GOARCH=wasm go build -trimpath -o /dev/null ./cmd/runtime
 	@echo "Standard Go compilation successful"
 	tinygo build -o /dev/null -target=wasm ./cmd/runtime 2>/dev/null || echo "TinyGo compilation test skipped (not installed)"
@@ -76,7 +86,7 @@ verify-tinygo:
 	tinygo version
 
 # Verify full project
-verify: build test-compile dev-generate
+verify: deps build test vet test-compile dev-generate
 	@echo "=== All verifications passed ==="
 
 # Help

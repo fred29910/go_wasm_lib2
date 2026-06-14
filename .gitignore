@@ -34,7 +34,8 @@ Thumbs.db
 examples/*/generated/
 
 # Go specific
-go.sum
+# go.sum should be committed for reproducible builds
+# go.sum
 
 # Temporary files
 *.tmp

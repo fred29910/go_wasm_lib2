@@ -2,7 +2,6 @@ package generator
 
 import (
 	"regexp"
-	"sort"
 	"strings"
 	"unicode"
 )
@@ -107,11 +106,3 @@ func isASCIIUpper(c byte) bool {
 	return c >= 'A' && c <= 'Z'
 }
 
-func sortedStringMapKeys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}

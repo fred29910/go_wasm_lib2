@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>WASM SDK Demo - {{htmlEscape .InfoTitle}}</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-8">
+	<div class="max-w-4xl mx-auto">
+		<h1 class="text-3xl font-bold mb-4">{{htmlEscape .InfoTitle}} WASM SDK Demo</h1>
+		<p class="text-gray-600 mb-6">Version: {{htmlEscape .InfoVersion}}</p>
+		
+		<div class="bg-white rounded-lg shadow p-6 mb-6">
+			<h2 class="text-xl font-semibold mb-4">Configuration</h2>
+			<div class="space-y-4">
+				<div>
+					<label class="block text-sm font-medium mb-1">Base URL</label>
+					<input type="text" id="baseUrl" value="{{htmlEscape .BaseURL}}" class="w-full px-3 py-2 border rounded">
+				</div>
+				<button id="initBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Initialize</button>
+				<button id="loadBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 ml-2">Load WASM</button>
+			</div>
+		</div>
+
+		<div class="bg-white rounded-lg shadow p-6">
+			<h2 class="text-xl font-semibold mb-4">API Operations</h2>
+			<div id="operations" class="space-y-4">
+{{range .Operations}}
+				<div class="border rounded p-4">
+					<h3 class="font-medium">{{.ID}}</h3>
+					<p class="text-sm text-gray-600 mb-2">{{.Method}} {{.Path}}</p>
+					<button onclick="call{{.ID}}()" class="bg-purple-500 text-white px-3 py-1 rounded text-sm hover:bg-purple-600">Execute</button>
+				</div>
+{{end}}
+			</div>
+		</div>
+	</div>
+
+	<script type="module">
+		import { WASMSDK } from './sdk.js';
+		
+		const sdk = new WASMSDK();
+		
+		document.getElementById('loadBtn').addEventListener('click', async () => {
+			await sdk.load();
+			console.log('WASM loaded');
+		});
+		
+		document.getElementById('initBtn').addEventListener('click', async () => {
+			await sdk.init({ baseUrl: document.getElementById('baseUrl').value });
+			console.log('Client initialized');
+		});
+
+{{range .Operations}}
+		window.call{{.ID}} = async () => {
+			const response = await sdk.callAPI('{{.ID}}', {
+				method: '{{.Method}}',
+				path: '{{.Path}}'
+			});
+			console.log('{{.ID}} response:', response);
+		};
+{{end}}
+	</script>
+</body>
+</html>

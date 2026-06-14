@@ -1,0 +1,7 @@
+module {{.Config.OutputModule}}
+
+go 1.25.1
+
+require github.com/fred29910/gowasm v0.0.0
+
+replace github.com/fred29910/gowasm => {{.Config.RuntimePath}}

@@ -183,13 +183,18 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	}, nil
 }
 
-// ResolvePath replaces path parameters and appends query parameters
+// ResolvePath replaces path parameters and appends query parameters.
+// It detects and rejects path traversal attempts (e.g. "..").
 func ResolvePath(path string, pathParams map[string]string, query map[string]string) string {
 	if path == "" {
 		path = "/"
 	}
 
 	for k, v := range pathParams {
+		// Reject path traversal attempts
+		if strings.Contains(v, "..") || strings.Contains(v, "//") {
+			v = ""
+		}
 		path = strings.ReplaceAll(path, "{"+k+"}", url.PathEscape(v))
 	}
 
