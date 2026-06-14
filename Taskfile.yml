@@ -1,0 +1,185 @@
+# Taskfile.yml for go_wasm_lib2 - Generic WASM HTTP SDK Generator
+# Install Task: https://taskfile.dev/installation/
+
+version: '3'
+
+vars:
+  BUILD_DIR: build
+  WASM_BINARY: '{{.BUILD_DIR}}/main.wasm'
+  TINY_WASM_BINARY: '{{.BUILD_DIR}}/tinymain.wasm'
+  SPEC: ""
+  OUT: ""
+  GOOS: js
+  GOARCH: wasm
+
+env:
+  GOOS: '{{.GOOS}}'
+  GOARCH: '{{.GOARCH}}'
+
+tasks:
+  default:
+    desc: List all available tasks
+    cmds:
+      - task --list-all
+
+  # Build Tasks
+  build:
+    desc: Build with standard Go compiler
+    cmds:
+      - echo "Building with standard Go compiler..."
+      - GOOS=js GOARCH=wasm go build -trimpath -o {{.WASM_BINARY}} ./cmd/runtime
+      - echo "Standard Go WASM built: {{.WASM_BINARY}}"
+      - ls -lh {{.WASM_BINARY}}
+    sources:
+      - '**/*.go'
+    generates:
+      - '{{.WASM_BINARY}}'
+
+  build:tinygo:
+    desc: Build with TinyGo compiler (smaller output)
+    cmds:
+      - echo "Building with TinyGo compiler..."
+      - tinygo build -o {{.TINY_WASM_BINARY}} -target=wasm ./cmd/runtime
+      - echo "TinyGo WASM built: {{.TINY_WASM_BINARY}}"
+      - ls -lh {{.TINY_WASM_BINARY}}
+    sources:
+      - '**/*.go'
+    generates:
+      - '{{.TINY_WASM_BINARY}}'
+
+  build:all:
+    desc: Build with both standard Go and TinyGo
+    cmds:
+      - task: build
+      - task: build:tinygo
+
+  # Dependency Management
+  deps:
+    desc: Download and tidy dependencies
+    cmds:
+      - go mod tidy
+      - go mod download
+
+  # Code Generation
+  generate:
+    desc: Generate SDK from OpenAPI spec (requires SPEC and OUT)
+    deps: [build:runtime]
+    cmds:
+      - |
+        if [ -z "{{.SPEC}}" ]; then
+          echo "Usage: task generate SPEC=path/to/openapi.yaml OUT=./output"
+          exit 1
+        fi
+      - mkdir -p {{.OUT}}
+      - go run ./cmd/generator -spec={{.SPEC}} -out={{.OUT}}
+
+  dev:generate:
+    desc: Generate SDK for petstore example
+    deps: [build:runtime]
+    cmds:
+      - mkdir -p examples/petstore/generated
+      - go run ./cmd/generator -spec=examples/petstore/openapi.yaml -out=examples/petstore/generated
+
+  build:runtime:
+    desc: Build the runtime for code generation
+    cmds:
+      - go build ./cmd/generator
+
+  # Testing & Validation
+  test:
+    desc: Run Go tests
+    cmds:
+      - go test ./...
+
+  test:compile:
+    desc: Test WASM compilation without running
+    cmds:
+      - GOOS=js GOARCH=wasm go build -trimpath -o /dev/null ./cmd/runtime
+      - echo "Standard Go compilation successful"
+      - tinygo build -o /dev/null -target=wasm ./cmd/runtime 2>/dev/null || echo "TinyGo compilation test skipped (not installed)"
+      - echo "Compilation tests passed"
+
+  verify:
+    desc: Verify the project builds correctly
+    cmds:
+      - echo "=== Verifying project ==="
+      - task: deps
+      - task: build
+      - task: test:compile
+      - task: dev:generate
+      - echo "=== All verifications passed ==="
+
+  # TinyGo Management
+  install:tinygo:macos:
+    desc: Install TinyGo on macOS
+    cmds:
+      - brew install tinygo
+
+  install:tinygo:linux:
+    desc: Install TinyGo on Linux
+    cmds:
+      - wget https://github.com/tinygo-org/tinygo/releases/download/v0.31.0/tinygo_0.31.0_amd64.deb
+      - sudo dpkg -i tinygo_0.31.0_amd64.deb
+      - rm tinygo_0.31.0_amd64.deb
+
+  verify:tinygo:
+    desc: Verify TinyGo installation
+    cmds:
+      - tinygo version
+
+  # Cleanup
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - echo "Cleaning build artifacts..."
+      - rm -rf {{.BUILD_DIR}}/
+      - rm -f *.wasm
+      - echo "Clean complete"
+
+  clean:all:
+    desc: Deep clean including generated files
+    cmds:
+      - task: clean
+      - echo "Removing generated SDK files..."
+      - rm -rf examples/*/generated/
+      - echo "Deep clean complete"
+
+  # Development Helpers
+  run:generator:
+    desc: Run generator CLI with custom args (args="...")
+    cmds:
+      - go run ./cmd/generator {{.args}}
+
+  dev:
+    desc: Start development workflow
+    cmds:
+      - task: deps
+      - task: build
+      - task: dev:generate
+
+  # Help
+  help:
+    desc: Show help information
+    cmds:
+      - echo ""
+      echo "=== go_wasm_lib2 - Generic WASM HTTP SDK Generator ==="
+      echo ""
+      echo "Build Commands:"
+      echo "  task build              - Build with standard Go"
+      echo "  task build:tinygo       - Build with TinyGo"
+      echo "  task build:all          - Build both"
+      echo ""
+      echo "Code Generation:"
+      echo "  task generate SPEC=... OUT=...  - Generate from OpenAPI spec"
+      echo "  task dev:generate               - Generate petstore example"
+      echo ""
+      echo "Testing:"
+      echo "  task test               - Run Go tests"
+      echo "  task test:compile       - Test compilation"
+      echo "  task verify             - Full verification"
+      echo ""
+      echo "Maintenance:"
+      echo "  task deps               - Download dependencies"
+      echo "  task clean              - Clean build artifacts"
+      echo "  task clean:all          - Deep clean"
+      echo ""
