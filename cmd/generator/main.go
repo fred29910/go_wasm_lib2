@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/fred29910/gowasm/pkg/generator"
+	"github.com/fred29910/gowasm/pkg/runtime"
 	"github.com/fred29910/gowasm/version"
 	"github.com/urfave/cli/v2"
 )
@@ -55,6 +56,20 @@ func main() {
 						Name:  "oxlint-disable",
 						Usage: "Disable oxlint after generation",
 					},
+					&cli.BoolFlag{
+						Name:  "wasm",
+						Usage: "Build WASM after generation",
+						Value: true,
+					},
+					&cli.StringFlag{
+						Name:  "wasm-out",
+						Usage: "Output path for WASM binary (default: <out>/main.wasm)",
+					},
+					&cli.StringFlag{
+						Name:  "compiler",
+						Usage: "WASM compiler to use: auto, tinygo, go",
+						Value: "auto",
+					},
 				},
 				Action: runGenerate,
 			},
@@ -79,6 +94,9 @@ func runGenerate(ctx *cli.Context) error {
 	packageName := ctx.String("package")
 	oxlintrcPath := ctx.String("oxlintrc")
 	disableLint := ctx.Bool("oxlint-disable")
+	buildWasm := ctx.Bool("wasm")
+	wasmOut := ctx.String("wasm-out")
+	compilerStr := ctx.String("compiler")
 
 	g := generator.NewGenerator(moduleName, outDir, packageName, outDir, "")
 
@@ -87,6 +105,12 @@ func runGenerate(ctx *cli.Context) error {
 	}
 
 	fmt.Printf("Generated SDK in %s\n", outDir)
+
+	if buildWasm {
+		if err := runBuildWASM(outDir, wasmOut, compilerStr); err != nil {
+			return err
+		}
+	}
 
 	if !disableLint {
 		if err := runOxlint(outDir, oxlintrcPath); err != nil {
@@ -108,6 +132,22 @@ func runInit(ctx *cli.Context) error {
 	fmt.Println("Created directories: specs/, generated/, build/")
 	fmt.Println("Next: place your OpenAPI spec in specs/ and run:")
 	fmt.Println("  gowasm-generator generate -s specs/openapi.yaml -o generated/")
+	return nil
+}
+
+func runBuildWASM(outDir, wasmOut, compilerStr string) error {
+	compiler := runtime.Compiler(compilerStr)
+
+	if wasmOut == "" {
+		wasmOut = filepath.Join(outDir, "main.wasm")
+	}
+
+	result, err := runtime.BuildWASM(wasmOut, outDir, compiler)
+	if err != nil {
+		return fmt.Errorf("wasm build failed: %w", err)
+	}
+
+	fmt.Printf("WASM built: %s (compiler: %s)\n", result.Output, result.Compiler)
 	return nil
 }
 

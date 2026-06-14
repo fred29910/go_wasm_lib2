@@ -33,10 +33,12 @@ This project provides two main components:
 - Generate Go client code for WASM runtime with request/response structs
 - Generate TypeScript SDK with typed interfaces and API functions
 - Generate demo HTML page for interactive testing
+- **Auto-compile WASM** after code generation with automatic tinyGo detection
 - Support for OpenAPI 3.x specifications (schemas, operations, parameters, requestBody, responses)
 - Automatic path and query parameter handling
 - Type-safe request/response conversion (Go ↔ TypeScript)
 - Customizable output (module name, package name, output directory)
+- Configurable WASM compiler (auto/tinygo/go) via `--compiler` flag
 
 ## Quick Start
 
@@ -61,11 +63,17 @@ make build-all
 ### Generate SDKs from OpenAPI Specs
 
 ```bash
-# Generate SDK from your OpenAPI spec
+# Generate SDK from your OpenAPI spec (auto-compiles WASM)
 make generate SPEC=path/to/openapi.yaml OUT=./output
 
 # Example with petstore
 make dev-generate
+
+# Using the CLI directly
+gowasm-generator generate -s path/to/openapi.yaml -o ./output
+
+# Force tinygo for WASM compilation
+gowasm-generator generate -s path/to/openapi.yaml -o ./output --compiler tinygo
 ```
 
 ### Run Tests
@@ -238,17 +246,27 @@ function findPetsByStatus(params: FindPetsByStatusRequest): Promise<HTTPResponse
 │       └── main.go                  # Build constraint: js && wasm
 ├── pkg/
 │   ├── generator/                    # Core generation logic
-│   │   ├── generator.go            # Main generator: model building, orchestration (326 lines)
-│   │   ├── openapi.go              # OpenAPI 3.x YAML parser with validation (186 lines)
-│   │   ├── types.go                # Type definitions and naming conversions (117 lines)
-│   │   ├── go_templates.go         # Go code generation templates (128 lines)
-│   │   └── ts_templates.go         # TypeScript + demo HTML templates (275 lines)
+│   │   ├── generator.go            # Main generator: model building, orchestration
+│   │   ├── openapi.go              # OpenAPI 3.x YAML parser with validation
+│   │   ├── types.go                # Type definitions and naming conversions
+│   │   ├── go_templates.go         # Go code generation templates (go:embed)
+│   │   ├── ts_templates.go         # TypeScript + demo HTML templates (go:embed)
+│   │   ├── templates/              # Embedded template files
+│   │   │   ├── sdk.go.tmpl         # Go client template
+│   │   │   ├── go.mod.tmpl         # Go module template
+│   │   │   ├── sdk.ts.tmpl         # TypeScript SDK template
+│   │   │   └── index.html.tmpl     # Demo HTML template
+│   │   ├── generator_test.go       # Generator unit tests
+│   │   ├── openapi_test.go         # OpenAPI parser tests
+│   │   └── types_test.go           # Type conversion tests
 │   └── runtime/                      # WASM runtime core
-│       ├── client.go               # HTTP client, request/response, operation registry (241 lines)
-│       ├── exports.go              # JavaScript-callable WASM exports (321 lines)
-│       ├── promise.go              # Promise helper for async JS interop (94 lines)
-│       ├── converter.go            # Go ↔ JavaScript type conversion via vert (252 lines)
-│       └── error.go                # Structured error types with error codes (69 lines)
+│       ├── build.go                # WASM build utility (auto-detect tinygo)
+│       ├── build_test.go           # WASM build tests
+│       ├── client.go               # HTTP client, request/response, operation registry
+│       ├── exports.go              # JavaScript-callable WASM exports
+│       ├── promise.go              # Promise helper for async JS interop
+│       ├── converter.go            # Go ↔ JavaScript type conversion via vert
+│       └── error.go                # Structured error types with error codes
 ├── examples/
 │   └── petstore/
 │       └── openapi.yaml             # Sample OpenAPI spec (Petstore API)
@@ -265,28 +283,64 @@ function findPetsByStatus(params: FindPetsByStatusRequest): Promise<HTTPResponse
 ### Generator CLI Options
 
 ```bash
-go run ./cmd/generator \
-  -spec=path/to/openapi.yaml \
-  -out=./output \
-  -module=mydomain \
-  -package=client
+gowasm-generator generate \
+  -s path/to/openapi.yaml \
+  -o ./output \
+  -m mydomain \
+  -p client
 ```
 
-| Flag | Description | Default | Required |
-|------|-------------|---------|----------|
-| `-spec` | Path to OpenAPI YAML specification | - | Yes |
-| `-out` | Output directory for generated code | `./generated` | No |
-| `-module` | Go module name for generated code | `github.com/fred29910/gowasm` | No |
-| `-package` | Package name for generated Go code | `generated` | No |
+| Flag | Aliases | Description | Default | Required |
+|------|---------|-------------|---------|----------|
+| `--spec` | `-s` | Path to OpenAPI YAML specification | - | Yes |
+| `--out` | `-o` | Output directory for generated code | `./generated` | No |
+| `--module` | `-m` | Go module name for generated code | `github.com/fred29910/gowasm` | No |
+| `--package` | `-p` | Package name for generated Go code | `generated` | No |
+| `--wasm` | | Build WASM after generation | `true` | No |
+| `--wasm-out` | | Output path for WASM binary | `<out>/main.wasm` | No |
+| `--compiler` | | WASM compiler: `auto`, `tinygo`, `go` | `auto` | No |
+| `--oxlintrc` | | Path to custom oxlintrc.json | embedded | No |
+| `--oxlint-disable` | | Disable oxlint after generation | `false` | No |
+
+**WASM Compilation:**
+
+The generator automatically compiles WASM after generating code. It detects `tinygo` in PATH and prefers it for smaller binaries:
+
+```bash
+# Default: auto-detect compiler (tinygo > go)
+gowasm-generator generate -s openapi.yaml -o ./output
+
+# Force tinygo (fails if not installed)
+gowasm-generator generate -s openapi.yaml -o ./output --compiler tinygo
+
+# Force standard go
+gowasm-generator generate -s openapi.yaml -o ./output --compiler go
+
+# Custom WASM output path
+gowasm-generator generate -s openapi.yaml -o ./output --wasm-out ./build/sdk.wasm
+
+# Skip WASM compilation
+gowasm-generator generate -s openapi.yaml -o ./output --wasm=false
+```
+
+**Compiler Selection (`--compiler`):**
+
+| Value | Behavior |
+|-------|----------|
+| `auto` | Use `tinygo` if available in PATH, otherwise fall back to `go` |
+| `tinygo` | Require `tinygo` (error if not found) |
+| `go` | Use standard `go` compiler with `GOOS=js GOARCH=wasm` |
 
 **Example with all options:**
 
 ```bash
-go run ./cmd/generator \
-  -spec=./api/openapi.yaml \
-  -out=./sdk/generated \
-  -module=github.com/myorg/myproject \
-  -package=apiclient
+gowasm-generator generate \
+  -s ./api/openapi.yaml \
+  -o ./sdk/generated \
+  -m github.com/myorg/myproject \
+  -p apiclient \
+  --compiler tinygo \
+  -wasm-out ./build/sdk.wasm
 ```
 
 **Generated files:**
@@ -294,8 +348,10 @@ go run ./cmd/generator \
 | File | Description |
 |------|-------------|
 | `generated.go` | Go client code with request/response structs and operation handlers |
+| `go.mod` | Go module definition for the generated SDK |
 | `sdk.ts` | TypeScript SDK with interfaces, typed API functions, and WASM wrapper |
 | `index.html` | Interactive demo page for testing the API |
+| `main.wasm` | Compiled WASM binary (if `--wasm=true`) |
 
 ### Runtime Configuration
 
@@ -447,8 +503,11 @@ task install:tinygo:linux   # Install TinyGo on Linux
 |--------|---------|--------|---------------|
 | Standard Go | `make build` | `build/main.wasm` | 2-5 MB |
 | TinyGo | `make build-tinygo` | `build/tinymain.wasm` | 200-500 KB |
+| Auto (generate) | `gowasm-generator generate` | `<out>/main.wasm` | depends on compiler |
 
 **Note:** TinyGo produces significantly smaller binaries but may have some compatibility limitations with certain Go packages.
+
+**Auto-detection:** When using `gowasm-generator generate`, the `--compiler auto` mode checks for `tinygo` in PATH and uses it if available, otherwise falls back to standard `go`.
 
 ## Development
 
