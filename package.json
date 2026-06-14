@@ -1,0 +1,13 @@
+{
+  "name": "gowasm",
+  "version": "1.0.0",
+  "description": "Generic WASM HTTP SDK Generator",
+  "private": true,
+  "scripts": {
+    "lint:ts": "oxlint --ext .ts .",
+    "lint:ts:fix": "oxlint --ext .ts . --fix"
+  },
+  "devDependencies": {
+    "oxlint": "^0.12.0"
+  }
+}
