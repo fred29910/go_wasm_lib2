@@ -48,3 +48,6 @@ go.sum
 
 # Taskfile
 .task/
+.opencode/
+.comet/
+.codegraph/.gitignore

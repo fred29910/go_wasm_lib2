@@ -9,5 +9,8 @@
   },
   "devDependencies": {
     "oxlint": "^0.12.0"
+  },
+  "dependencies": {
+    "@fission-ai/openspec": "^1.4.1"
   }
 }
