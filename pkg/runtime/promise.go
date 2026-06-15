@@ -42,7 +42,7 @@ func (p *PromiseHelper) RejectPromise(reject js.Value, err error) {
 		reject.Invoke(js.Global().Get("Error").New("Unknown error"))
 		return
 	}
-	
+
 	var wasmErr *WASMError
 	if AsWASMError(err, &wasmErr) {
 		// Create a JS Error with our custom properties

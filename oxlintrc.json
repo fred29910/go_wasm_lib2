@@ -5,15 +5,20 @@
     "es2022": true
   },
   "rules": {
-    "typescript/no-unused-vars": "warn",
-    "typescript/no-explicit-any": "off",
-    "typescript/ban-ts-comment": "off",
-    "no-fallthrough": "off",
-    "no-unused-vars": "off",
-    "no-empty-pattern": "off",
-    "no-console": "off",
+    "typescript/no-unused-vars": "error",
+    "typescript/no-explicit-any": "warn",
+    "typescript/ban-ts-comment": "error",
+    "typescript/no-empty-interface": "error",
+    "typescript/no-empty-object-type": "error",
+    "no-fallthrough": "error",
+    "no-unused-vars": "error",
+    "no-empty-pattern": "error",
+    "no-empty": "error",
+    "no-console": "warn",
+    "no-warning-comments": "warn",
     "eqeqeq": "warn",
-    "no-var": "warn"
+    "no-var": "warn",
+    "prefer-const": "warn"
   },
-  "ignorePatterns": ["node_modules", "build", "*.wasm", "generated"]
+  "ignorePatterns": ["node_modules", "build", "*.wasm", "generated", "*.d.ts"]
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -91,12 +92,12 @@ func NewHTTPClient(config *ClientConfig) *HTTPClient {
 
 // Request represents an HTTP request
 type Request struct {
-	Method      string            `json:"method"`
-	Path        string            `json:"path"`
-	PathParams  map[string]string `json:"pathParams,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Query       map[string]string `json:"query,omitempty"`
-	Body        interface{}       `json:"body,omitempty"`
+	Method     string            `json:"method"`
+	Path       string            `json:"path"`
+	PathParams map[string]string `json:"pathParams,omitempty"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Query      map[string]string `json:"query,omitempty"`
+	Body       interface{}       `json:"body,omitempty"`
 }
 
 // Response represents an HTTP response
@@ -117,7 +118,14 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	if req.Body != nil {
 		bodyBytes, err := json.Marshal(req.Body)
 		if err != nil {
-			return nil, NewError(ErrCodeSerializationFail, "Failed to serialize request body", err.Error())
+			return nil, NewContextError(
+				ErrCodeSerializationFail,
+				"Failed to serialize request body",
+				err.Error(),
+				"client.go",
+				120,
+				"Ensure the request body contains only JSON-serializable types (string, number, bool, slice, map, struct)",
+			)
 		}
 		bodyReader = bytes.NewReader(bodyBytes)
 	}
@@ -125,7 +133,14 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	// Create HTTP request
 	httpReq, err := http.NewRequestWithContext(ctx, req.Method, fullURL, bodyReader)
 	if err != nil {
-		return nil, NewError(ErrCodeRequestFailed, "Failed to create request", err.Error())
+		return nil, NewContextError(
+			ErrCodeRequestFailed,
+			"Failed to create HTTP request",
+			err.Error(),
+			"client.go",
+			128,
+			"Check that the method is valid (GET, POST, PUT, DELETE, etc.) and the URL is well-formed",
+		)
 	}
 
 	// Set headers
@@ -146,16 +161,37 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	if err != nil {
 		// Check if it's a timeout
 		if urlErr, ok := err.(*url.Error); ok && urlErr.Timeout() {
-			return nil, NewError(ErrCodeTimeout, "Request timeout", err.Error())
+			return nil, NewContextError(
+				ErrCodeTimeout,
+				"Request timeout",
+				err.Error(),
+				"client.go",
+				149,
+				fmt.Sprintf("Increase the timeout value in ClientConfig (current: %v seconds)", c.config.Timeout),
+			)
 		}
-		return nil, NewError(ErrCodeNetworkError, "Network error", err.Error())
+		return nil, NewContextError(
+			ErrCodeNetworkError,
+			"Network error",
+			err.Error(),
+			"client.go",
+			151,
+			"Check network connectivity, verify the BaseURL is correct, and ensure the server is reachable",
+		)
 	}
 	defer resp.Body.Close()
 
 	// Read response body
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, NewError(ErrCodeRequestFailed, "Failed to read response", err.Error())
+		return nil, NewContextError(
+			ErrCodeRequestFailed,
+			"Failed to read response body",
+			err.Error(),
+			"client.go",
+			158,
+			"The response body may have been corrupted or the connection closed prematurely",
+		)
 	}
 
 	// Parse response

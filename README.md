@@ -268,8 +268,11 @@ function findPetsByStatus(params: FindPetsByStatusRequest): Promise<HTTPResponse
 │       ├── converter.go            # Go ↔ JavaScript type conversion via vert
 │       └── error.go                # Structured error types with error codes
 ├── examples/
-│   └── petstore/
-│       └── openapi.yaml             # Sample OpenAPI spec (Petstore API)
+│   ├── petstore/
+│   │   └── openapi.yaml             # Sample OpenAPI spec (Petstore API)
+│   └── templates/
+│       ├── custom.go.tmpl           # Custom Go template example
+│       └── custom.ts.tmpl           # Custom TypeScript template example
 ├── build/                            # Generated WASM binaries (gitignored)
 ├── Makefile                          # GNU Make build system (81 lines)
 ├── Taskfile.yml                      # Task runner build system (185 lines)
@@ -301,6 +304,9 @@ gowasm-generator generate \
 | `--compiler` | | WASM compiler: `auto`, `tinygo`, `go` | `auto` | No |
 | `--oxlintrc` | | Path to custom oxlintrc.json | embedded | No |
 | `--oxlint-disable` | | Disable oxlint after generation | `false` | No |
+| `--validation` | `-v` | Generate validation methods for request structs | `true` | No |
+| `--go-template` | | Path to custom Go template file | embedded | No |
+| `--ts-template` | | Path to custom TypeScript template file | embedded | No |
 
 **WASM Compilation:**
 
@@ -321,6 +327,9 @@ gowasm-generator generate -s openapi.yaml -o ./output --wasm-out ./build/sdk.was
 
 # Skip WASM compilation
 gowasm-generator generate -s openapi.yaml -o ./output --wasm=false
+
+# Skip validation method generation
+gowasm-generator generate -s openapi.yaml -o ./output --validation=false
 ```
 
 **Compiler Selection (`--compiler`):**
@@ -340,7 +349,9 @@ gowasm-generator generate \
   -m github.com/myorg/myproject \
   -p apiclient \
   --compiler tinygo \
-  -wasm-out ./build/sdk.wasm
+  --wasm-out ./build/sdk.wasm \
+  --go-template ./templates/custom.go.tmpl \
+  --ts-template ./templates/custom.ts.tmpl
 ```
 
 **Generated files:**
@@ -385,6 +396,228 @@ await wasmInitClient({
   credentials: 'include'  // Send cookies cross-origin
 });
 ```
+
+### Custom Templates
+
+The generator supports custom Go `text/template` files for both Go and TypeScript code generation. This allows you to customize the output format, add boilerplate, or generate code in a different style.
+
+#### CLI Flags
+
+```bash
+# Use a custom Go template
+gowasm-generator generate -s openapi.yaml -o ./output --go-template ./my-go.tmpl
+
+# Use a custom TypeScript template
+gowasm-generator generate -s openapi.yaml -o ./output --ts-template ./my-ts.tmpl
+
+# Combine both
+gowasm-generator generate -s openapi.yaml -o ./output \
+  --go-template ./my-go.tmpl \
+  --ts-template ./my-ts.tmpl
+```
+
+#### Template Variables
+
+Templates use Go's `text/template` syntax. The following data structures are available:
+
+**Root Data Structure (`GenerationModel`):**
+
+```go
+type GenerationModel struct {
+    Doc           *OpenAPI              // Parsed OpenAPI document
+    Config        *Config               // Generator configuration
+    InfoTitle     string                // API title from OpenAPI info
+    InfoVersion   string                // API version from OpenAPI info
+    BaseURL       string                // Default server URL
+    Schemas       []GeneratedSchema     // All schema definitions
+    Operations    []GeneratedOperation  // All operation definitions
+    OperationIDs  []string              // Sorted list of operation IDs
+    Validation    bool                  // Whether validation methods are enabled
+}
+```
+
+**Config (`{{.Config}}`):**
+
+```go
+type Config struct {
+    ModuleName    string  // Go module name (e.g., "github.com/myorg/myproject")
+    OutputModule  string  // Output module path
+    Package       string  // Go package name (e.g., "generated")
+    RuntimePath   string  // Local path to runtime module
+    RuntimeImport string  // Import path of the runtime package
+    Validation    bool    // Whether validation is enabled
+}
+```
+
+**GeneratedSchema (`{{.Schemas}}`):**
+
+```go
+type GeneratedSchema struct {
+    Name       string              // Original schema name from OpenAPI
+    GoName     string              // Go identifier name (PascalCase)
+    TSName     string              // TypeScript identifier name
+    Properties []GeneratedProperty // Schema properties
+}
+```
+
+**GeneratedProperty (`{{.Schemas.Properties}}`):**
+
+```go
+type GeneratedProperty struct {
+    Name       string        // Original property name
+    GoName     string        // Go field name
+    TSName     string        // TypeScript field name
+    GoType     string        // Go type (e.g., "string", "int64", "[]Pet")
+    TSType     string        // TypeScript type (e.g., "string", "number", "Array<Pet>")
+    Required   bool          // Whether the property is required
+    EnumValues []interface{} // Allowed values (if enum)
+    Format     string        // Format hint (e.g., "email", "uuid", "date-time")
+}
+```
+
+**GeneratedOperation (`{{.Operations}}`):**
+
+```go
+type GeneratedOperation struct {
+    ID                  string                // Operation ID from OpenAPI
+    TSName              string                // TypeScript function name
+    Method              string                // HTTP method (GET, POST, etc.)
+    Path                string                // Request path (e.g., "/pet/{petId}")
+    Summary             string                // Operation summary
+    RequestStructName   string                // Go request struct name
+    RequestInterface    string                // Go request interface name
+    ResponseStructName  string                // Go response struct name
+    ResponseInterface   string                // Go response interface name
+    PathParams          []GeneratedParameter  // Path parameters
+    QueryParams         []GeneratedParameter  // Query parameters
+    HasBody             bool                  // Whether operation has request body
+    BodyType            string                // Go type for request body
+    ResponseType        string                // Go type for primary response
+    BodyParamName       string                // Body parameter name (always "body")
+    Responses           []GeneratedResponse   // All possible responses
+}
+```
+
+**GeneratedParameter (`{{.Operations.PathParams}}` / `{{.Operations.QueryParams}}`):**
+
+```go
+type GeneratedParameter struct {
+    Name       string        // Original parameter name
+    GoName     string        // Go field name
+    TSName     string        // TypeScript field name
+    GoType     string        // Go type
+    TSType     string        // TypeScript type
+    In         string        // "path" or "query"
+    Required   bool          // Whether parameter is required
+    EnumValues []interface{} // Allowed values (if enum)
+    Format     string        // Format hint
+}
+```
+
+**GeneratedResponse (`{{.Operations.Responses}}`):**
+
+```go
+type GeneratedResponse struct {
+    Code        string  // HTTP status code (e.g., "200", "404")
+    GoType      string  // Go type for response body
+    TSType      string  // TypeScript type for response body
+    Description string  // Response description
+    Primary     bool    // Whether this is the primary (2xx) response
+    StructName  string  // Go response struct name
+}
+```
+
+#### Template Functions
+
+The following custom template functions are available:
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `hasPrefix` | `hasPrefix(s, prefix string) bool` | Check if string has prefix |
+
+#### Example: Custom Go Template
+
+```go
+// my-go.tmpl
+package {{.Config.Package}}
+
+import (
+    "context"
+    {{.Config.RuntimeImport}}
+)
+
+// API title: {{.InfoTitle}}
+// API version: {{.InfoVersion}}
+
+{{range .Schemas}}
+type {{.GoName}} struct {
+{{range .Properties}}    {{.GoName}} {{.GoType}} `json:"{{.Name}},omitempty"`
+{{end}}}
+{{end}}
+
+{{range .Operations}}
+func {{.RequestInterface}}ToRequest(params {{.RequestInterface}}) runtime.Request {
+    return runtime.Request{
+        Method: "{{.Method}}",
+        Path:   "{{.Path}}",
+{{if .HasBody}}        Body:   params.Body,
+{{end}}    }
+}
+{{end}}
+```
+
+#### Example: Custom TypeScript Template
+
+```typescript
+// my-ts.tmpl
+// Generated from {{.InfoTitle}} v{{.InfoVersion}}
+
+{{range .Schemas}}
+export interface {{.GoName}} {
+{{range .Properties}}    {{.TSName}}{{if not .Required}}?{{end}}: {{.TSType}};
+{{end}}}
+{{end}}
+
+{{range .Operations}}
+export async function {{.TSName}}(params: {{.RequestInterface}}): Promise<HTTPResponse> {
+    return (window as any).wasmCallAPI('{{.ID}}', {
+        method: '{{.Method}}',
+        path: '{{.Path}}',
+{{if .HasBody}}        body: params.body,
+{{end}}    });
+}
+{{end}}
+```
+
+#### Example Templates
+
+The `examples/templates/` directory contains ready-to-use custom template examples:
+
+| Template | Description |
+|----------|-------------|
+| `examples/templates/custom.go.tmpl` | Custom Go template with section comments, detailed field documentation, and helper functions |
+| `examples/templates/custom.ts.tmpl` | Custom TypeScript template with section comments, detailed JSDoc-style comments, and typed API functions |
+
+To use these examples:
+
+```bash
+# Use the custom Go template
+gowasm-generator generate -s openapi.yaml -o ./output --go-template ./examples/templates/custom.go.tmpl
+
+# Use the custom TypeScript template
+gowasm-generator generate -s openapi.yaml -o ./output --ts-template ./examples/templates/custom.ts.tmpl
+
+# Use both custom templates
+gowasm-generator generate -s openapi.yaml -o ./output \
+  --go-template ./examples/templates/custom.go.tmpl \
+  --ts-template ./examples/templates/custom.ts.tmpl
+```
+
+These examples demonstrate:
+- **Section organization** with clear comment separators
+- **Field documentation** including required/optional status and format hints
+- **Available template variables** listed at the top of each file
+- **Best practices** for template structure and formatting
 
 ### OpenAPI Spec Requirements
 

@@ -3,6 +3,7 @@ package generator
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -11,11 +12,15 @@ import (
 // Config holds the configuration for code generation.
 // Use NewConfig to create a Config with sensible defaults.
 type Config struct {
-	ModuleName    string // Go module name for generated code
-	OutputModule  string // Output module path
-	Package       string // Go package name
-	RuntimePath   string // Local path to the runtime module (for go.mod replace)
-	RuntimeImport string // Import path of the runtime package
+	ModuleName     string // Go module name for generated code
+	OutputModule   string // Output module path
+	Package        string // Go package name
+	RuntimePath    string // Local path to the runtime module (for go.mod replace)
+	RuntimeImport  string // Import path of the runtime package
+	Validation     bool   // Generate validation methods for request structs
+	GoTemplatePath string // Custom Go template file path (optional)
+	TSTemplatePath string // Custom TypeScript template file path (optional)
+	Verbose        bool   // Show detailed progress during generation
 }
 
 // NewConfig creates a Config with default values.
@@ -27,12 +32,14 @@ func NewConfig() *Config {
 		Package:       "generated",
 		RuntimePath:   cwd,
 		RuntimeImport: "github.com/fred29910/gowasm/pkg/runtime",
+		Validation:    true,
 	}
 }
 
 // Generator generates Go and TypeScript SDK from OpenAPI specs.
 type Generator struct {
-	config *Config
+	config  *Config
+	verbose bool
 }
 
 // NewGenerator creates a Generator with the given parameters.
@@ -62,28 +69,146 @@ func NewGeneratorFromConfig(cfg *Config) *Generator {
 	if cfg == nil {
 		cfg = NewConfig()
 	}
-	return &Generator{config: cfg}
+	return &Generator{config: cfg, verbose: cfg.Verbose}
 }
 
-func (g *Generator) Generate(specPath, outDir string) error {
+func (g *Generator) progress(msg string) {
+	if g.verbose {
+		fmt.Println(msg)
+	}
+}
+
+func (g *Generator) Generate(specPath, outDir string) (*GenerationResult, error) {
+	g.progress("Parsing spec...")
 	doc, err := ParseOpenAPI(specPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	totalSchemas := len(doc.Components.Schemas)
+	totalOps := len(doc.Operations())
+	g.progress(fmt.Sprintf("Building model: %d schemas, %d operations...", totalSchemas, totalOps))
 	model := g.buildModel(doc)
 
+	g.progress("Rendering Go template...")
 	if err := g.writeGoClient(outDir, model); err != nil {
-		return err
+		return nil, err
 	}
+	g.progress("Rendering TypeScript template...")
 	if err := g.writeTSClient(outDir, model); err != nil {
-		return err
+		return nil, err
 	}
+	g.progress("Writing files...")
 	if err := g.writeDemoHTML(outDir, model); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	// Collect file info
+	var result GenerationResult
+	files := []struct {
+		path string
+		name string
+	}{
+		{outDir, "generated.go"},
+		{outDir, "sdk.ts"},
+		{outDir, "index.html"},
+	}
+	for _, f := range files {
+		info, err := os.Stat(filepath.Join(f.path, f.name))
+		if err != nil {
+			return nil, fmt.Errorf("stat %s: %w", f.name, err)
+		}
+		result.Files = append(result.Files, GeneratedFile{
+			Path: f.name,
+			Size: int(info.Size()),
+		})
+		result.TotalSize += int(info.Size())
+	}
+
+	g.progress(fmt.Sprintf("Generated %d operations, %d schemas, %d files", totalOps, totalSchemas, len(result.Files)))
+	return &result, nil
+}
+
+// DryRunFile represents a file that would be generated in dry-run mode.
+type DryRunFile struct {
+	Path string // Relative path of the file
+	Size int    // Size of the rendered content in bytes
+}
+
+// DryRunResult holds the result of a dry-run generation.
+type DryRunResult struct {
+	Files     []DryRunFile // List of files that would be generated
+	TotalSize int          // Total size of all files in bytes
+}
+
+// GeneratedFile represents a file that was generated.
+type GeneratedFile struct {
+	Path string // Relative path of the file
+	Size int    // Size of the file in bytes
+}
+
+// GenerationResult holds the result of a generation.
+type GenerationResult struct {
+	Files     []GeneratedFile // List of files that were generated
+	TotalSize int             // Total size of all files in bytes
+}
+
+// GenerateDryRun parses the spec, builds the model, renders templates in memory,
+// and returns what would be generated without writing any files.
+func (g *Generator) GenerateDryRun(specPath, outDir string) (*DryRunResult, error) {
+	g.progress("Parsing spec...")
+	doc, err := ParseOpenAPI(specPath)
+	if err != nil {
+		return nil, err
+	}
+
+	totalSchemas := len(doc.Components.Schemas)
+	totalOps := len(doc.Operations())
+	g.progress(fmt.Sprintf("Building model: %d schemas, %d operations...", totalSchemas, totalOps))
+	model := g.buildModel(doc)
+
+	var result DryRunResult
+
+	// Render Go client
+	g.progress("Rendering Go template...")
+	goContent, err := g.renderGoClient(model)
+	if err != nil {
+		return nil, fmt.Errorf("render Go client: %w", err)
+	}
+	result.Files = append(result.Files, DryRunFile{
+		Path: "generated.go",
+		Size: len(goContent),
+	})
+
+	// Render TypeScript client
+	g.progress("Rendering TypeScript template...")
+	tsContent, err := g.renderTSClient(model)
+	if err != nil {
+		return nil, fmt.Errorf("render TypeScript client: %w", err)
+	}
+	result.Files = append(result.Files, DryRunFile{
+		Path: "sdk.ts",
+		Size: len(tsContent),
+	})
+
+	// Render demo HTML
+	g.progress("Writing files...")
+	htmlContent, err := g.renderDemoHTML(model)
+	if err != nil {
+		return nil, fmt.Errorf("render demo HTML: %w", err)
+	}
+	result.Files = append(result.Files, DryRunFile{
+		Path: "index.html",
+		Size: len(htmlContent),
+	})
+
+	// Calculate total size
+	for _, file := range result.Files {
+		result.TotalSize += file.Size
+	}
+
+	g.progress(fmt.Sprintf("Generated %d operations, %d schemas, %d files", totalOps, totalSchemas, len(result.Files)))
+	return &result, nil
 }
 
 type GenerationModel struct {
@@ -95,6 +220,7 @@ type GenerationModel struct {
 	Schemas       []GeneratedSchema
 	Operations    []GeneratedOperation
 	OperationIDs  []string
+	Validation    bool
 }
 
 func (g *Generator) buildModel(doc *OpenAPI) GenerationModel {
@@ -111,6 +237,7 @@ func (g *Generator) buildModel(doc *OpenAPI) GenerationModel {
 		Schemas:       schemas,
 		Operations:    ops,
 		OperationIDs:  operationIDs,
+		Validation:    g.config.Validation,
 	}
 }
 
@@ -128,12 +255,14 @@ func (g *Generator) buildSchemas(doc *OpenAPI) []GeneratedSchema {
 			propSchema := schema.Properties[prop]
 			required := contains(schema.Required, prop)
 			s.Properties = append(s.Properties, GeneratedProperty{
-				Name:     prop,
-				GoName:   ToGoName(prop),
-				TSName:   ToTSName(prop),
-				GoType:   g.goType(&propSchema, required),
-				TSType:   g.tsType(&propSchema, required),
-				Required: required,
+				Name:       prop,
+				GoName:     ToGoName(prop),
+				TSName:     ToTSName(prop),
+				GoType:     g.goType(&propSchema, required),
+				TSType:     g.tsType(&propSchema, required),
+				Required:   required,
+				EnumValues: propSchema.Enum,
+				Format:     propSchema.Format,
 			})
 		}
 		schemas = append(schemas, s)
@@ -174,13 +303,15 @@ func (g *Generator) buildOperation(op *Operation) GeneratedOperation {
 
 	for _, p := range op.Parameters {
 		param := GeneratedParameter{
-			Name:     p.Name,
-			GoName:   ToGoName(p.Name),
-			TSName:   ToTSName(p.Name),
-			GoType:   g.goType(p.Schema, p.Required),
-			TSType:   g.tsType(p.Schema, p.Required),
-			In:       p.In,
-			Required: p.Required,
+			Name:       p.Name,
+			GoName:     ToGoName(p.Name),
+			TSName:     ToTSName(p.Name),
+			GoType:     g.goType(p.Schema, p.Required),
+			TSType:     g.tsType(p.Schema, p.Required),
+			In:         p.In,
+			Required:   p.Required,
+			EnumValues: p.Schema.Enum,
+			Format:     p.Schema.Format,
 		}
 		if p.In == "path" {
 			genOp.PathParams = append(genOp.PathParams, param)
@@ -199,11 +330,62 @@ func (g *Generator) buildOperation(op *Operation) GeneratedOperation {
 		}
 	}
 
-	if resp := op.Responses["200"]; resp.Content != nil {
-		if media := firstJSONMedia(resp.Content); media != nil && media.Schema != nil {
-			genOp.ResponseType = g.goType(media.Schema, false)
+	// Capture all responses - first pass: find primary (2xx or first)
+	var primaryCode string
+	for code := range op.Responses {
+		if code >= "200" && code < "300" {
+			primaryCode = code
+			break
 		}
 	}
+	// Fallback: use first response if no 2xx found
+	if primaryCode == "" {
+		for code := range op.Responses {
+			primaryCode = code
+			break
+		}
+	}
+
+	// Second pass: build response list
+	for code, resp := range op.Responses {
+		var goType, tsType string
+		if resp.Content != nil {
+			if media := firstJSONMedia(resp.Content); media != nil && media.Schema != nil {
+				goType = g.goType(media.Schema, false)
+				tsType = g.tsType(media.Schema, false)
+			}
+		}
+		if goType == "" {
+			goType = "interface{}"
+		}
+		if tsType == "" {
+			tsType = "any"
+		}
+
+		// Determine struct name: primary uses ResponseStructName, others use {OperationId}{Code}Response
+		var structName string
+		if code == primaryCode {
+			structName = genOp.ResponseStructName
+		} else {
+			structName = ToGoName(genOp.ID) + code + "Response"
+		}
+
+		genResp := GeneratedResponse{
+			Code:        code,
+			GoType:      goType,
+			TSType:      tsType,
+			Description: resp.Description,
+			Primary:     code == primaryCode,
+			StructName:  structName,
+		}
+		genOp.Responses = append(genOp.Responses, genResp)
+
+		// Set primary response type
+		if code == primaryCode {
+			genOp.ResponseType = goType
+		}
+	}
+
 	if genOp.ResponseType == "" {
 		genOp.ResponseType = "interface{}"
 	}
@@ -281,6 +463,9 @@ func (g *Generator) tsType(schema *Schema, required bool) string {
 		}
 		return "any"
 	}
+	if schema.HasEnum() {
+		return g.tsUnionType(schema.Enum)
+	}
 	if schema.Type == "array" {
 		if schema.Items != nil {
 			return "Array<" + g.tsType(schema.Items, false) + ">"
@@ -305,6 +490,19 @@ func (g *Generator) tsType(schema *Schema, required bool) string {
 	default:
 		return "any"
 	}
+}
+
+func (g *Generator) tsUnionType(values []interface{}) string {
+	var parts []string
+	for _, v := range values {
+		switch val := v.(type) {
+		case string:
+			parts = append(parts, fmt.Sprintf("'%s'", val))
+		default:
+			parts = append(parts, fmt.Sprintf("%v", val))
+		}
+	}
+	return strings.Join(parts, " | ")
 }
 
 func (g *Generator) docSchemaRef(ref string) (string, bool) {
