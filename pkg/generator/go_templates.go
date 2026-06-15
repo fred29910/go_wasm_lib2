@@ -15,6 +15,9 @@ var goClientTmpl string
 //go:embed templates/go.mod.tmpl
 var goModTmpl string
 
+//go:embed templates/main.go.tmpl
+var goMainTmpl string
+
 type goTemplateData struct {
 	GenerationModel
 }
@@ -57,6 +60,19 @@ func (g *Generator) writeGoMod(outDir string, model GenerationModel) error {
 	}
 	tmpl := template.Must(template.New("go.mod").Parse(goModTmpl))
 	file, err := os.Create(filepath.Join(outDir, "go.mod"))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return tmpl.Execute(file, model)
+}
+
+func (g *Generator) writeGoMain(outDir string, model GenerationModel) error {
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		return err
+	}
+	tmpl := template.Must(template.New("main.go").Parse(goMainTmpl))
+	file, err := os.Create(filepath.Join(outDir, "main.go"))
 	if err != nil {
 		return err
 	}

@@ -69,6 +69,7 @@ func SetDefaultClient(config *ClientConfig) {
 type HTTPClient struct {
 	config     *ClientConfig
 	httpClient *http.Client
+	mu         sync.RWMutex
 }
 
 // NewHTTPClient creates a new HTTP client
@@ -96,7 +97,7 @@ type Request struct {
 	Path       string            `json:"path"`
 	PathParams map[string]string `json:"pathParams,omitempty"`
 	Headers    map[string]string `json:"headers,omitempty"`
-	Query      map[string]string `json:"query,omitempty"`
+	Query      url.Values        `json:"query,omitempty"`
 	Body       interface{}       `json:"body,omitempty"`
 }
 
@@ -110,8 +111,8 @@ type Response struct {
 
 // Call makes an HTTP request and returns a Response
 func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) {
-	// Build URL
-	fullURL := c.buildURL(req.Path, req.Query)
+	// Build URL with path params
+	fullURL := c.buildURL(req.Path, req.PathParams, req.Query)
 
 	// Serialize body
 	var bodyReader io.Reader
@@ -143,10 +144,12 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 		)
 	}
 
-	// Set headers
+	// Set headers (protected by read lock)
+	c.mu.RLock()
 	for k, v := range c.config.Headers {
 		httpReq.Header.Set(k, v)
 	}
+	c.mu.RUnlock()
 	for k, v := range req.Headers {
 		httpReq.Header.Set(k, v)
 	}
@@ -221,7 +224,7 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 
 // ResolvePath replaces path parameters and appends query parameters.
 // It detects and rejects path traversal attempts (e.g. "..").
-func ResolvePath(path string, pathParams map[string]string, query map[string]string) string {
+func ResolvePath(path string, pathParams map[string]string, query url.Values) string {
 	if path == "" {
 		path = "/"
 	}
@@ -230,20 +233,15 @@ func ResolvePath(path string, pathParams map[string]string, query map[string]str
 		path = strings.ReplaceAll(path, "{"+k+"}", url.PathEscape(safePathParam(v)))
 	}
 
-	if len(query) == 0 {
+	if query == nil || len(query) == 0 {
 		return path
-	}
-
-	params := url.Values{}
-	for k, v := range query {
-		params.Add(k, v)
 	}
 
 	sep := "?"
 	if strings.Contains(path, "?") {
 		sep = "&"
 	}
-	return path + sep + params.Encode()
+	return path + sep + query.Encode()
 }
 
 func safePathParam(v string) string {
@@ -257,10 +255,10 @@ func safePathParam(v string) string {
 	return v
 }
 
-// buildURL constructs the full URL with query parameters
-func (c *HTTPClient) buildURL(path string, query map[string]string) string {
+// buildURL constructs the full URL with path and query parameters
+func (c *HTTPClient) buildURL(path string, pathParams map[string]string, query url.Values) string {
 	base := strings.TrimRight(c.config.BaseURL, "/")
-	fullURL := ResolvePath(path, nil, query)
+	fullURL := ResolvePath(path, pathParams, query)
 	fullURL = strings.TrimLeft(fullURL, "/")
 
 	if base == "" {
@@ -275,11 +273,15 @@ func (c *HTTPClient) SetAuthToken(token string, scheme string) {
 	if scheme == "" {
 		scheme = "Bearer"
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.config.Headers["Authorization"] = scheme + " " + token
 }
 
 // ClearAuthToken removes the authorization header
 func (c *HTTPClient) ClearAuthToken() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	delete(c.config.Headers, "Authorization")
 }
 

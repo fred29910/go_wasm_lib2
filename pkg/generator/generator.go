@@ -94,6 +94,14 @@ func (g *Generator) Generate(specPath, outDir string) (*GenerationResult, error)
 	if err := g.writeGoClient(outDir, model); err != nil {
 		return nil, err
 	}
+	g.progress("Writing go.mod...")
+	if err := g.writeGoMod(outDir, model); err != nil {
+		return nil, err
+	}
+	g.progress("Writing main.go...")
+	if err := g.writeGoMain(outDir, model); err != nil {
+		return nil, err
+	}
 	g.progress("Rendering TypeScript template...")
 	if err := g.writeTSClient(outDir, model); err != nil {
 		return nil, err
@@ -110,6 +118,8 @@ func (g *Generator) Generate(specPath, outDir string) (*GenerationResult, error)
 		name string
 	}{
 		{outDir, "generated.go"},
+		{outDir, "go.mod"},
+		{outDir, "main.go"},
 		{outDir, "sdk.ts"},
 		{outDir, "index.html"},
 	}

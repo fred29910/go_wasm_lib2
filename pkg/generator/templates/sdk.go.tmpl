@@ -5,6 +5,7 @@ package {{.Config.Package}}
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"reflect"
 	"strconv"
 
@@ -39,7 +40,7 @@ type {{.RequestInterface}} struct {
 {{range .PathParams}}	{{.GoName}} {{.GoType}} `json:"{{.Name}}"`
 {{end}}{{range .QueryParams}}	{{.GoName}} {{.GoType}} `json:"{{.Name}},omitempty"`
 {{end}}	PathParams map[string]string `json:"pathParams,omitempty"`
-	Query      map[string]string `json:"query,omitempty"`
+	Query      url.Values        `json:"query,omitempty"`
 	Headers    map[string]string `json:"headers,omitempty"`
 {{if .HasBody}}	Body       {{.BodyType}} `json:"body,omitempty"`
 {{end}}}
@@ -86,7 +87,7 @@ func {{.RequestInterface}}ToRequest(params {{.RequestInterface}}) runtime.Reques
 		Method:     "{{.Method}}",
 		Path:       "{{.Path}}",
 		PathParams: pathParams,
-		Query:      copyStringMap(params.Query),
+		Query:      copyValues(params.Query),
 		Headers:    copyStringMap(params.Headers),
 {{if .HasBody}}		Body:       params.Body,
 {{else}}		Body:       nil,
@@ -120,6 +121,18 @@ func copyStringMap(in map[string]string) map[string]string {
 	return out
 }
 
+func copyValues(in url.Values) url.Values {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(url.Values, len(in))
+	for k, v := range in {
+		out[k] = append([]string{}, v...)
+	}
+	return out
+}
+
+func stringToString(v string) string { return v }
 func intToString(v int) string    { return strconv.Itoa(v) }
 func int64ToString(v int64) string { return strconv.FormatInt(v, 10) }
 func floatToString(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"sync"
 	"syscall/js"
@@ -147,7 +148,6 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 			if headers := reqJS.Get("headers"); headers.Type() == js.TypeObject {
 				headersMap, err := e.converter.JSValueToMap(headers)
 				if err == nil {
-					// Convert map[string]interface{} to map[string]string
 					req.Headers = make(map[string]string)
 					for k, v := range headersMap {
 						req.Headers[k] = toString(v)
@@ -155,13 +155,23 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 				}
 			}
 
+			// Parse pathParams
+			if pathParamsJS := reqJS.Get("pathParams"); pathParamsJS.Type() == js.TypeObject {
+				pathParamsMap, err := e.converter.JSValueToMap(pathParamsJS)
+				if err == nil {
+					req.PathParams = make(map[string]string)
+					for k, v := range pathParamsMap {
+						req.PathParams[k] = toString(v)
+					}
+				}
+			}
+
 			if query := reqJS.Get("query"); query.Type() == js.TypeObject {
 				queryMap, err := e.converter.JSValueToMap(query)
 				if err == nil {
-					// Convert to string map
-					req.Query = make(map[string]string)
+					req.Query = make(url.Values)
 					for k, v := range queryMap {
-						req.Query[k] = toString(v)
+						req.Query.Add(k, toString(v))
 					}
 				}
 			}
