@@ -102,13 +102,11 @@ func BuildWASM(outPath, packagePath string, compiler Compiler) (*BuildResult, er
 func buildWithTinyGo(outPath, packagePath string) (*BuildResult, error) {
 	fmt.Printf("Building WASM with tinygo: %s -> %s\n", packagePath, outPath)
 	cmd := exec.Command("tinygo", "build", "-o", outPath, "-target=wasm", packagePath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := runBuildCommand(cmd); err != nil {
 		return nil, &BuildError{
 			Message:    "TinyGo build failed",
 			FilePath:   "build.go",
-			LineNumber: 67,
+			LineNumber: 102,
 			Suggestion: "Check that the package path is correct and the code compiles with TinyGo. Run 'tinygo build -target=wasm' manually to see detailed errors",
 			Inner:      err,
 		}
@@ -120,16 +118,20 @@ func buildWithGo(outPath, packagePath string) (*BuildResult, error) {
 	fmt.Printf("Building WASM with go: %s -> %s\n", packagePath, outPath)
 	cmd := exec.Command("go", "build", "-trimpath", "-o", outPath, packagePath)
 	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := runBuildCommand(cmd); err != nil {
 		return nil, &BuildError{
 			Message:    "Go build failed",
 			FilePath:   "build.go",
-			LineNumber: 79,
+			LineNumber: 123,
 			Suggestion: "Ensure GOOS=js and GOARCH=wasm are set, and the package compiles for WASM target. Run 'GOOS=js GOARCH=wasm go build' manually to see detailed errors",
 			Inner:      err,
 		}
 	}
 	return &BuildResult{Compiler: "go", Output: outPath}, nil
+}
+
+func runBuildCommand(cmd *exec.Cmd) error {
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }

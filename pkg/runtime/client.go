@@ -227,11 +227,7 @@ func ResolvePath(path string, pathParams map[string]string, query map[string]str
 	}
 
 	for k, v := range pathParams {
-		// Reject path traversal attempts
-		if strings.Contains(v, "..") || strings.Contains(v, "//") {
-			v = ""
-		}
-		path = strings.ReplaceAll(path, "{"+k+"}", url.PathEscape(v))
+		path = strings.ReplaceAll(path, "{"+k+"}", url.PathEscape(safePathParam(v)))
 	}
 
 	if len(query) == 0 {
@@ -248,6 +244,17 @@ func ResolvePath(path string, pathParams map[string]string, query map[string]str
 		sep = "&"
 	}
 	return path + sep + params.Encode()
+}
+
+func safePathParam(v string) string {
+	unescaped, err := url.PathUnescape(v)
+	if err != nil {
+		return ""
+	}
+	if strings.Contains(unescaped, "..") || strings.Contains(unescaped, "//") || strings.HasPrefix(unescaped, "/") {
+		return ""
+	}
+	return v
 }
 
 // buildURL constructs the full URL with query parameters

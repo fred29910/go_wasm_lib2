@@ -73,50 +73,50 @@ func main() {
 						Name:  "oxlint-disable",
 						Usage: "Disable oxlint after generation",
 					},
-				&cli.BoolFlag{
-					Name:  "dry-run",
-					Usage: "Show what would be generated without writing files",
-				},
-				&cli.BoolFlag{
-					Name:  "wasm",
-					Usage: "Build WASM after generation",
-					Value: true,
-				},
+					&cli.BoolFlag{
+						Name:  "dry-run",
+						Usage: "Show what would be generated without writing files",
+					},
+					&cli.BoolFlag{
+						Name:  "wasm",
+						Usage: "Build WASM after generation",
+						Value: true,
+					},
 					&cli.StringFlag{
 						Name:  "wasm-out",
 						Usage: "Output path for WASM binary (default: <out>/main.wasm)",
 					},
-				&cli.StringFlag{
-					Name:  "compiler",
-					Usage: "WASM compiler to use: auto, tinygo, go",
-					Value: "auto",
+					&cli.StringFlag{
+						Name:  "compiler",
+						Usage: "WASM compiler to use: auto, tinygo, go",
+						Value: "auto",
+					},
+					&cli.BoolFlag{
+						Name:    "validation",
+						Aliases: []string{"v"},
+						Usage:   "Generate validation methods for request structs",
+						Value:   true,
+					},
+					&cli.StringFlag{
+						Name:  "go-template",
+						Usage: "Path to custom Go template file (optional, uses embedded default if not set)",
+					},
+					&cli.StringFlag{
+						Name:  "ts-template",
+						Usage: "Path to custom TypeScript template file (optional, uses embedded default if not set)",
+					},
+					&cli.BoolFlag{
+						Name:    "verbose",
+						Aliases: []string{"V"},
+						Usage:   "Show detailed progress during generation",
+					},
+					&cli.StringFlag{
+						Name:  "output",
+						Usage: "Output format: text (default) or json",
+						Value: "text",
+					},
 				},
-				&cli.BoolFlag{
-					Name:    "validation",
-					Aliases: []string{"v"},
-					Usage:   "Generate validation methods for request structs",
-					Value:   true,
-				},
-				&cli.StringFlag{
-					Name:  "go-template",
-					Usage: "Path to custom Go template file (optional, uses embedded default if not set)",
-				},
-				&cli.StringFlag{
-					Name:  "ts-template",
-					Usage: "Path to custom TypeScript template file (optional, uses embedded default if not set)",
-				},
-				&cli.BoolFlag{
-					Name:    "verbose",
-					Aliases: []string{"V"},
-					Usage:   "Show detailed progress during generation",
-				},
-				&cli.StringFlag{
-					Name:  "output",
-					Usage: "Output format: text (default) or json",
-					Value: "text",
-				},
-			},
-			Action: runGenerate,
+				Action: runGenerate,
 			},
 			{
 				Name:   "init",

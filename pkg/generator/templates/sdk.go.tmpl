@@ -5,6 +5,7 @@ package {{.Config.Package}}
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 
 	runtime "{{.Config.RuntimeImport}}"
@@ -22,7 +23,7 @@ func (s {{.GoName}}) Validate() error {
 		return fmt.Errorf("{{.Name}} is required")
 	}
 {{end}}{{if .EnumValues}}	if !isValidEnum(s.{{.GoName}}, []interface{}{ {{- range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}} }) {
-		return fmt.Errorf("{{.Name}} must be one of the allowed values: {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}}")
+		return fmt.Errorf("{{.Name}} must be one of the allowed values: {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}%q{{else}}%v{{end}}{{end}}", {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}})
 	}
 {{end}}{{if .Format}}	if !isValid{{if eq .Format "email"}}Email{{else if eq .Format "uuid"}}UUID{{else if eq .Format "date-time"}}DateTime{{else if eq .Format "date"}}DateTime{{end}}(s.{{.GoName}}) {
 		return fmt.Errorf("{{.Name}} must be a valid {{.Format}}")
@@ -50,7 +51,7 @@ func (r {{.RequestInterface}}) Validate() error {
 		return fmt.Errorf("{{.Name}} is required")
 	}
 {{end}}{{if .EnumValues}}	if !isValidEnum(r.{{.GoName}}, []interface{}{ {{- range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}} }) {
-		return fmt.Errorf("{{.Name}} must be one of the allowed values: {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}}")
+		return fmt.Errorf("{{.Name}} must be one of the allowed values: {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}%q{{else}}%v{{end}}{{end}}", {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}})
 	}
 {{end}}{{if .Format}}	if !isValid{{if eq .Format "email"}}Email{{else if eq .Format "uuid"}}UUID{{else if eq .Format "date-time"}}DateTime{{else if eq .Format "date"}}DateTime{{end}}(r.{{.GoName}}) {
 		return fmt.Errorf("{{.Name}} must be a valid {{.Format}}")
@@ -59,7 +60,7 @@ func (r {{.RequestInterface}}) Validate() error {
 		return fmt.Errorf("{{.Name}} is required")
 	}
 {{end}}{{if .EnumValues}}	if !isValidEnum(r.{{.GoName}}, []interface{}{ {{- range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}} }) {
-		return fmt.Errorf("{{.Name}} must be one of the allowed values: {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}}")
+		return fmt.Errorf("{{.Name}} must be one of the allowed values: {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}%q{{else}}%v{{end}}{{end}}", {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}})
 	}
 {{end}}{{if .Format}}	if !isValid{{if eq .Format "email"}}Email{{else if eq .Format "uuid"}}UUID{{else if eq .Format "date-time"}}DateTime{{else if eq .Format "date"}}DateTime{{end}}(r.{{.GoName}}) {
 		return fmt.Errorf("{{.Name}} must be a valid {{.Format}}")
@@ -123,6 +124,13 @@ func intToString(v int) string    { return strconv.Itoa(v) }
 func int64ToString(v int64) string { return strconv.FormatInt(v, 10) }
 func floatToString(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
 func boolToString(v bool) string   { return strconv.FormatBool(v) }
+
+func isValid(value interface{}) bool {
+	if value == nil {
+		return false
+	}
+	return !reflect.ValueOf(value).IsZero()
+}
 
 func isValidEnum(value interface{}, allowed []interface{}) bool {
 	for _, v := range allowed {
