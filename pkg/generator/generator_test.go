@@ -421,7 +421,7 @@ func TestValidationEnabled(t *testing.T) {
 	if !strings.Contains(output, `return fmt.Errorf("email is required")`) {
 		t.Error("expected required field validation for email")
 	}
-	if !strings.Contains(output, `isValidEmail(s.Email)`) {
+	if !strings.Contains(output, `runtime.IsValidEmail(s.Email)`) {
 		t.Error("expected email format validation")
 	}
 }
@@ -579,7 +579,7 @@ func TestValidationEnumFields(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "isValidEnum(s.Status") {
+	if !strings.Contains(output, "runtime.IsValidEnum(s.Status") {
 		t.Error("expected enum validation for status field")
 	}
 	if !strings.Contains(output, `"active"`) || !strings.Contains(output, `"inactive"`) || !strings.Contains(output, `"pending"`) {
@@ -1298,7 +1298,7 @@ func TestValidationEnumField(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, `isValidEnum(s.Role`) {
+	if !strings.Contains(output, `runtime.IsValidEnum(s.Role`) {
 		t.Error("expected enum validation for role field")
 	}
 	if !strings.Contains(output, `"admin"`) {
@@ -1310,7 +1310,7 @@ func TestValidationEnumField(t *testing.T) {
 	if !strings.Contains(output, `"guest"`) {
 		t.Error("expected 'guest' in enum values")
 	}
-	if !strings.Contains(output, `role must be one of the allowed values`) {
+	if !strings.Contains(output, `role must be one of:`) {
 		t.Error("expected enum validation error message")
 	}
 }
@@ -1362,7 +1362,7 @@ func TestValidationFormatEmail(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, `isValidEmail(s.Email)`) {
+	if !strings.Contains(output, `runtime.IsValidEmail(s.Email)`) {
 		t.Error("expected email format validation call")
 	}
 	if !strings.Contains(output, `email must be a valid email`) {
@@ -1417,7 +1417,7 @@ func TestValidationFormatUUID(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, `isValidUUID(s.ID)`) {
+	if !strings.Contains(output, `runtime.IsValidUUID(s.ID)`) {
 		t.Error("expected UUID format validation call")
 	}
 	if !strings.Contains(output, `id must be a valid uuid`) {
@@ -1472,7 +1472,7 @@ func TestValidationFormatDateTime(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, `isValidDateTime(s.StartTime)`) {
+	if !strings.Contains(output, `runtime.IsValidDateTime(s.StartTime)`) {
 		t.Error("expected date-time format validation call")
 	}
 	if !strings.Contains(output, `startTime must be a valid date-time`) {
@@ -1624,11 +1624,11 @@ func TestIntegrationPetstore(t *testing.T) {
 	// Step 5: Verify expected functions in Go
 	expectedGoFunctions := []string{
 		"func CreatePetRequestToRequest(",
-		"func CreatePetRequestCall(",
+		"func (c *APIClient) CreatePetRequestCall(",
 		"func FindPetsByStatusRequestToRequest(",
-		"func FindPetsByStatusRequestCall(",
+		"func (c *APIClient) FindPetsByStatusRequestCall(",
 		"func GetPetByIDRequestToRequest(",
-		"func GetPetByIDRequestCall(",
+		"func (c *APIClient) GetPetByIDRequestCall(",
 	}
 	for _, expected := range expectedGoFunctions {
 		if !strings.Contains(goStr, expected) {

@@ -74,7 +74,7 @@ func NewGeneratorFromConfig(cfg *Config) *Generator {
 
 func (g *Generator) progress(msg string) {
 	if g.verbose {
-		fmt.Println(msg)
+		fmt.Fprintln(os.Stderr, msg)
 	}
 }
 

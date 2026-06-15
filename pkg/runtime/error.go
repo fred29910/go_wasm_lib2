@@ -3,6 +3,8 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
+	"runtime"
 )
 
 // WASMError represents an error that can be serialized to JavaScript
@@ -13,6 +15,12 @@ type WASMError struct {
 	FilePath   string `json:"filePath,omitempty"`
 	LineNumber int    `json:"lineNumber,omitempty"`
 	Suggestion string `json:"suggestion,omitempty"`
+	err       error  `json:"-"`
+}
+
+// Unwrap returns the wrapped error, enabling errors.Is/As support.
+func (e *WASMError) Unwrap() error {
+	return e.err
 }
 
 func (e *WASMError) Error() string {
@@ -90,6 +98,28 @@ func (e *WASMError) WithContext(filePath string, lineNumber int, suggestion stri
 	e.LineNumber = lineNumber
 	e.Suggestion = suggestion
 	return e
+}
+
+// WrapWASMError creates a WASMError from an existing error with automatic caller info.
+// skip is the number of stack frames to skip (0 = caller of WrapWASMError).
+func WrapWASMError(code, message string, err error, suggestion string) *WASMError {
+	_, file, line, ok := runtime.Caller(1)
+	if !ok {
+		file = "unknown"
+	}
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	}
+	return &WASMError{
+		Code:       code,
+		Message:    message,
+		Details:    errMsg,
+		FilePath:   filepath.Base(file),
+		LineNumber: line,
+		Suggestion: suggestion,
+		err:        err,
+	}
 }
 
 // FromError converts a standard error to WASMError
