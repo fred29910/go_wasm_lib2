@@ -47,8 +47,13 @@ func TestBuildWASM_InvalidCompiler(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid compiler")
 	}
-	if err.Error() != "unknown compiler: invalid" {
+	// Check that the error message contains the compiler name
+	if !contains(err.Error(), "invalid") {
 		t.Errorf("unexpected error: %v", err)
+	}
+	// Check that the error message contains the suggestion
+	if !contains(err.Error(), "supported compilers") {
+		t.Errorf("error should contain supported compilers suggestion: %v", err)
 	}
 }
 
@@ -59,6 +64,10 @@ func TestBuildWASM_TinyGoNotAvailable(t *testing.T) {
 	_, err := BuildWASM("/tmp/test.wasm", ".", CompilerTinyGo)
 	if err == nil {
 		t.Fatal("expected error when tinygo not found")
+	}
+	// Check that the error message contains the suggestion
+	if !contains(err.Error(), "Install TinyGo") {
+		t.Errorf("error should contain TinyGo installation suggestion: %v", err)
 	}
 }
 
@@ -106,7 +115,7 @@ func TestBuildWASM_GoCompiler(t *testing.T) {
 	// But the important thing is CompilerGo was accepted (not "unknown compiler").
 	if err != nil {
 		// Expected - just ensure it's not an "unknown compiler" error.
-		if err.Error() == "unknown compiler: go" {
+		if contains(err.Error(), "unknown compiler") {
 			t.Fatalf("CompilerGo not recognized")
 		}
 	}
@@ -127,4 +136,17 @@ func findProjectRoot() (string, error) {
 		}
 		dir = parent
 	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstring(s, substr))
+}
+
+func containsSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

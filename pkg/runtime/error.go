@@ -7,29 +7,48 @@ import (
 
 // WASMError represents an error that can be serialized to JavaScript
 type WASMError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Details string `json:"details,omitempty"`
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	Details    string `json:"details,omitempty"`
+	FilePath   string `json:"filePath,omitempty"`
+	LineNumber int    `json:"lineNumber,omitempty"`
+	Suggestion string `json:"suggestion,omitempty"`
 }
 
 func (e *WASMError) Error() string {
+	var msg string
 	if e.Details != "" {
-		return fmt.Sprintf("[%s] %s: %s", e.Code, e.Message, e.Details)
+		msg = fmt.Sprintf("[%s] %s: %s", e.Code, e.Message, e.Details)
+	} else {
+		msg = fmt.Sprintf("[%s] %s", e.Code, e.Message)
 	}
-	return fmt.Sprintf("[%s] %s", e.Code, e.Message)
+
+	if e.FilePath != "" {
+		if e.LineNumber > 0 {
+			msg = fmt.Sprintf("%s (in %s:%d)", msg, e.FilePath, e.LineNumber)
+		} else {
+			msg = fmt.Sprintf("%s (in %s)", msg, e.FilePath)
+		}
+	}
+
+	if e.Suggestion != "" {
+		msg = fmt.Sprintf("%s\nSuggestion: %s", msg, e.Suggestion)
+	}
+
+	return msg
 }
 
 // Error codes
 const (
-	ErrCodeInvalidConfig     = "INVALID_CONFIG"
-	ErrCodeInitFailed        = "INIT_FAILED"
-	ErrCodeRequestFailed     = "REQUEST_FAILED"
-	ErrCodeSerializationFail = "SERIALIZATION_FAILED"
+	ErrCodeInvalidConfig       = "INVALID_CONFIG"
+	ErrCodeInitFailed          = "INIT_FAILED"
+	ErrCodeRequestFailed       = "REQUEST_FAILED"
+	ErrCodeSerializationFail   = "SERIALIZATION_FAILED"
 	ErrCodeDeserializationFail = "DESERIALIZATION_FAILED"
-	ErrCodeNotInitialized    = "NOT_INITIALIZED"
-	ErrCodeInvalidOperation  = "INVALID_OPERATION"
-	ErrCodeNetworkError      = "NETWORK_ERROR"
-	ErrCodeTimeout           = "TIMEOUT"
+	ErrCodeNotInitialized      = "NOT_INITIALIZED"
+	ErrCodeInvalidOperation    = "INVALID_OPERATION"
+	ErrCodeNetworkError        = "NETWORK_ERROR"
+	ErrCodeTimeout             = "TIMEOUT"
 )
 
 // Predefined errors
@@ -51,6 +70,26 @@ func NewError(code, message, details string) *WASMError {
 		Message: message,
 		Details: details,
 	}
+}
+
+// NewContextError creates a new WASMError with context information
+func NewContextError(code, message, details, filePath string, lineNumber int, suggestion string) *WASMError {
+	return &WASMError{
+		Code:       code,
+		Message:    message,
+		Details:    details,
+		FilePath:   filePath,
+		LineNumber: lineNumber,
+		Suggestion: suggestion,
+	}
+}
+
+// WithContext adds context information to an existing WASMError
+func (e *WASMError) WithContext(filePath string, lineNumber int, suggestion string) *WASMError {
+	e.FilePath = filePath
+	e.LineNumber = lineNumber
+	e.Suggestion = suggestion
+	return e
 }
 
 // FromError converts a standard error to WASMError

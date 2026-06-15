@@ -52,3 +52,4 @@ examples/*/generated/
 .opencode/
 .comet/
 .codegraph/.gitignore
+generator

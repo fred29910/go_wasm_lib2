@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	"fmt"
 	"reflect"
 	"syscall/js"
 
@@ -31,25 +32,32 @@ func (c *Converter) GoToJSValue(val interface{}) (js.Value, error) {
 
 // dangerousJSKeys are JavaScript property names that could lead to prototype pollution.
 var dangerousJSKeys = map[string]bool{
-	"__proto__":      true,
-	"constructor":   true,
-	"prototype":     true,
-	"__defineGetter__":  true,
-	"__defineSetter__":  true,
-	"__lookupGetter__":  true,
-	"__lookupSetter__":  true,
-	"hasOwnProperty":    true,
-	"isPrototypeOf":     true,
+	"__proto__":            true,
+	"constructor":          true,
+	"prototype":            true,
+	"__defineGetter__":     true,
+	"__defineSetter__":     true,
+	"__lookupGetter__":     true,
+	"__lookupSetter__":     true,
+	"hasOwnProperty":       true,
+	"isPrototypeOf":        true,
 	"propertyIsEnumerable": true,
-	"toLocaleString":    true,
-	"toString":          true,
-	"valueOf":           true,
+	"toLocaleString":       true,
+	"toString":             true,
+	"valueOf":              true,
 }
 
 // JSValueToMap converts a JavaScript object to a Go map
 func (c *Converter) JSValueToMap(jsVal js.Value) (map[string]interface{}, error) {
 	if jsVal.Type() != js.TypeObject {
-		return nil, NewError(ErrCodeDeserializationFail, "Expected JavaScript object", "")
+		return nil, NewContextError(
+			ErrCodeDeserializationFail,
+			"Expected JavaScript object",
+			fmt.Sprintf("Got type %s instead", jsVal.Type().String()),
+			"converter.go",
+			51,
+			"Pass a plain JavaScript object {}, not an array, function, or primitive value",
+		)
 	}
 
 	result := make(map[string]interface{})
@@ -96,7 +104,14 @@ func (c *Converter) SliceToJSArray(slice interface{}) js.Value {
 // JSArrayToSlice converts a JavaScript array to a Go slice
 func (c *Converter) JSArrayToSlice(jsVal js.Value, elementType reflect.Type) (interface{}, error) {
 	if jsVal.Type() != js.TypeObject || jsVal.Get("length").Type() == js.TypeUndefined {
-		return nil, NewError(ErrCodeDeserializationFail, "Expected JavaScript array", "")
+		return nil, NewContextError(
+			ErrCodeDeserializationFail,
+			"Expected JavaScript array",
+			fmt.Sprintf("Got type %s instead", jsVal.Type().String()),
+			"converter.go",
+			98,
+			"Pass a JavaScript array [], not an object, function, or primitive value",
+		)
 	}
 
 	length := jsVal.Get("length").Int()
@@ -268,6 +283,13 @@ func (c *Converter) jsValueToReflect(jsVal js.Value, targetType reflect.Type) (r
 		ptr.Elem().Set(elem)
 		return ptr, nil
 	default:
-		return reflect.Value{}, NewError(ErrCodeDeserializationFail, "Unsupported type: "+targetType.Kind().String(), "")
+		return reflect.Value{}, NewContextError(
+			ErrCodeDeserializationFail,
+			"Unsupported type for conversion",
+			fmt.Sprintf("Cannot convert JavaScript value to Go type %s", targetType.Kind().String()),
+			"converter.go",
+			271,
+			"Supported types: bool, int*, uint*, float*, string, slice, map, struct, pointer. Use a supported Go type as the conversion target",
+		)
 	}
 }

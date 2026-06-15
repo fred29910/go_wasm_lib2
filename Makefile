@@ -64,12 +64,12 @@ lint-ts-fix:
 generate:
 	@if [ -z "$(SPEC)" ]; then echo "Usage: make generate SPEC=path/to/openapi.yaml [OUT=./output]"; exit 1; fi
 	@mkdir -p $(OUT)
-	go run ./cmd/generator -spec=$(SPEC) -out=$(OUT)
+	go run ./cmd/generator generate -s $(SPEC) -out=$(OUT)
 
 # Development: run generator with example spec
 dev-generate:
 	@mkdir -p examples/petstore/generated
-	go run ./cmd/generator -spec=examples/petstore/openapi.yaml -out=examples/petstore/generated
+	go run ./cmd/generator generate -s examples/petstore/openapi.yaml -out=examples/petstore/generated
 
 # Install TinyGo (macOS)
 install-tinygo-macos:

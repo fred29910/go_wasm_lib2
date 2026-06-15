@@ -5,8 +5,10 @@ package runtime
 import (
 	"context"
 	"encoding/json"
-	"sync"
+	"fmt"
+	"net/url"
 	"strconv"
+	"sync"
 	"syscall/js"
 )
 
@@ -44,29 +46,36 @@ func (e *WASMExports) initClient(this js.Value, args []js.Value) interface{} {
 		go func() {
 			e.mu.Lock()
 			defer e.mu.Unlock()
-			
+
 			if len(args) < 1 || args[0].Type() == js.TypeUndefined || args[0].Type() == js.TypeNull {
-				e.promise.RejectPromise(reject, NewError(ErrCodeInvalidConfig, "Expected config object", ""))
+				e.promise.RejectPromise(reject, NewContextError(
+					ErrCodeInvalidConfig,
+					"Expected config object",
+					"Received null, undefined, or no arguments",
+					"exports.go",
+					48,
+					"Pass a configuration object: { baseUrl: string, timeout?: number, headers?: object, credentials?: string }",
+				))
 				return
 			}
 
 			configJS := args[0]
-			
+
 			// Parse config
 			config := DefaultClientConfig()
-			
+
 			if baseURL := configJS.Get("baseUrl"); baseURL.Type() == js.TypeString {
 				config.BaseURL = baseURL.String()
 			}
-			
+
 			if timeout := configJS.Get("timeout"); timeout.Type() == js.TypeNumber {
 				config.Timeout = timeout.Int()
 			}
-			
+
 			if credentials := configJS.Get("credentials"); credentials.Type() == js.TypeString {
 				config.Credentials = credentials.String()
 			}
-			
+
 			if headers := configJS.Get("headers"); headers.Type() == js.TypeObject {
 				headersMap, err := e.converter.JSValueToMap(headers)
 				if err == nil {
@@ -77,7 +86,7 @@ func (e *WASMExports) initClient(this js.Value, args []js.Value) interface{} {
 					}
 				}
 			}
-			
+
 			// Create client
 			e.client = NewHTTPClient(config)
 			e.initialized = true
@@ -102,14 +111,21 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 			initialized := e.initialized
 			client := e.client
 			e.mu.RUnlock()
-			
+
 			if !initialized || client == nil {
 				e.promise.RejectPromise(reject, ErrNotInitialized)
 				return
 			}
 
 			if len(args) < 2 {
-				e.promise.RejectPromise(reject, NewError(ErrCodeInvalidOperation, "Expected operationId and request object", ""))
+				e.promise.RejectPromise(reject, NewContextError(
+					ErrCodeInvalidOperation,
+					"Expected operationId and request object",
+					fmt.Sprintf("Received %d arguments", len(args)),
+					"exports.go",
+					111,
+					"Call with two arguments: wasmCallAPI(operationId, { method: 'GET', path: '/api/resource' })",
+				))
 				return
 			}
 
@@ -118,45 +134,54 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 
 			// Parse request
 			req := &Request{}
-			
+
 			if method := reqJS.Get("method"); method.Type() == js.TypeString {
 				req.Method = method.String()
 			} else {
 				req.Method = "GET"
 			}
-			
+
 			if path := reqJS.Get("path"); path.Type() == js.TypeString {
 				req.Path = path.String()
 			}
-			
+
 			if headers := reqJS.Get("headers"); headers.Type() == js.TypeObject {
 				headersMap, err := e.converter.JSValueToMap(headers)
 				if err == nil {
-					// Convert map[string]interface{} to map[string]string
 					req.Headers = make(map[string]string)
 					for k, v := range headersMap {
 						req.Headers[k] = toString(v)
 					}
 				}
 			}
-			
-			if query := reqJS.Get("query"); query.Type() == js.TypeObject {
-				queryMap, err := e.converter.JSValueToMap(query)
+
+			// Parse pathParams
+			if pathParamsJS := reqJS.Get("pathParams"); pathParamsJS.Type() == js.TypeObject {
+				pathParamsMap, err := e.converter.JSValueToMap(pathParamsJS)
 				if err == nil {
-					// Convert to string map
-					req.Query = make(map[string]string)
-					for k, v := range queryMap {
-						req.Query[k] = toString(v)
+					req.PathParams = make(map[string]string)
+					for k, v := range pathParamsMap {
+						req.PathParams[k] = toString(v)
 					}
 				}
 			}
-			
+
+			if query := reqJS.Get("query"); query.Type() == js.TypeObject {
+				queryMap, err := e.converter.JSValueToMap(query)
+				if err == nil {
+					req.Query = make(url.Values)
+					for k, v := range queryMap {
+						req.Query.Add(k, toString(v))
+					}
+				}
+			}
+
 			if body := reqJS.Get("body"); body.Type() != js.TypeUndefined && body.Type() != js.TypeNull {
 				// Convert body to Go value
 				bodyVal := e.converter.jsValueToInterface(body)
 				req.Body = bodyVal
 			}
-			
+
 			// Make the call
 			ctx := context.Background()
 			resp, err := client.Call(ctx, req)
@@ -164,14 +189,21 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 				e.promise.RejectPromise(reject, err)
 				return
 			}
-			
+
 			// Convert response to JS
 			respJS, err := e.converter.GoToJSValue(resp)
 			if err != nil {
-				e.promise.RejectPromise(reject, NewError(ErrCodeSerializationFail, "Failed to serialize response", err.Error()))
+				e.promise.RejectPromise(reject, NewContextError(
+					ErrCodeSerializationFail,
+					"Failed to serialize response to JavaScript",
+					err.Error(),
+					"exports.go",
+					169,
+					"The response contains types that cannot be converted to JavaScript values",
+				))
 				return
 			}
-			
+
 			e.promise.ResolvePromise(resolve, respJS)
 		}()
 	})
@@ -194,7 +226,14 @@ func (e *WASMExports) setAuthToken(this js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
 		return map[string]interface{}{
 			"success": false,
-			"error":   "Expected token argument",
+			"error": NewContextError(
+				ErrCodeInvalidOperation,
+				"Expected token argument",
+				"No token provided",
+				"exports.go",
+				194,
+				"Call with a token string: wasmSetAuthToken('your-token', 'Bearer')",
+			).Error(),
 		}
 	}
 
@@ -266,7 +305,7 @@ func toString(v interface{}) string {
 	if v == nil {
 		return ""
 	}
-	
+
 	switch val := v.(type) {
 	case string:
 		return val
@@ -312,10 +351,10 @@ func toString(v interface{}) string {
 func ExportMain() {
 	exports := NewWASMExports()
 	exports.ExportFunctions()
-	
+
 	// Signal that WASM is ready
 	js.Global().Set("wasmReady", true)
-	
+
 	// Keep the program running
 	select {}
 }

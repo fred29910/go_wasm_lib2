@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"net/url"
 	"testing"
 )
 
@@ -10,7 +11,7 @@ func TestResolvePath(t *testing.T) {
 		name       string
 		path       string
 		pathParams map[string]string
-		query      map[string]string
+		query      url.Values
 		expected   string
 	}{
 		{
@@ -32,14 +33,14 @@ func TestResolvePath(t *testing.T) {
 		{
 			name:     "path with query",
 			path:     "/pets",
-			query:    map[string]string{"status": "available"},
+			query:    url.Values{"status": []string{"available"}},
 			expected: "/pets?status=available",
 		},
 		{
 			name:       "path with params and query",
 			path:       "/pets/{petId}",
 			pathParams: map[string]string{"petId": "123"},
-			query:      map[string]string{"status": "available"},
+			query:      url.Values{"status": []string{"available"}},
 			expected:   "/pets/123?status=available",
 		},
 		{
@@ -55,9 +56,21 @@ func TestResolvePath(t *testing.T) {
 			expected:   "/pets/",
 		},
 		{
+			name:       "url encoded path traversal attempt",
+			path:       "/pets/{petId}",
+			pathParams: map[string]string{"petId": "%2e%2e%2fetc%2fpasswd"},
+			expected:   "/pets/",
+		},
+		{
+			name:       "url encoded absolute path attempt",
+			path:       "/pets/{petId}",
+			pathParams: map[string]string{"petId": "%2Fetc%2Fpasswd"},
+			expected:   "/pets/",
+		},
+		{
 			name:     "path with existing query",
 			path:     "/pets?limit=10",
-			query:    map[string]string{"status": "available"},
+			query:    url.Values{"status": []string{"available"}},
 			expected: "/pets?limit=10&status=available",
 		},
 		{

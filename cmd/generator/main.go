@@ -2,10 +2,12 @@ package main
 
 import (
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/fred29910/gowasm/pkg/generator"
 	"github.com/fred29910/gowasm/pkg/runtime"
@@ -15,6 +17,21 @@ import (
 
 //go:embed oxlintrc.json
 var defaultOxlintrc []byte
+
+// JSONOutput represents the JSON output structure for CI/CD integration.
+type JSONOutput struct {
+	Success   bool       `json:"success"`
+	Files     []FileInfo `json:"files,omitempty"`
+	TotalSize int        `json:"totalSize,omitempty"`
+	Duration  int64      `json:"duration"`
+	Error     string     `json:"error,omitempty"`
+}
+
+// FileInfo represents a generated file.
+type FileInfo struct {
+	Path string `json:"path"`
+	Size int    `json:"size"`
+}
 
 func main() {
 	app := &cli.App{
@@ -57,6 +74,10 @@ func main() {
 						Usage: "Disable oxlint after generation",
 					},
 					&cli.BoolFlag{
+						Name:  "dry-run",
+						Usage: "Show what would be generated without writing files",
+					},
+					&cli.BoolFlag{
 						Name:  "wasm",
 						Usage: "Build WASM after generation",
 						Value: true,
@@ -69,6 +90,30 @@ func main() {
 						Name:  "compiler",
 						Usage: "WASM compiler to use: auto, tinygo, go",
 						Value: "auto",
+					},
+					&cli.BoolFlag{
+						Name:    "validation",
+						Aliases: []string{"v"},
+						Usage:   "Generate validation methods for request structs",
+						Value:   true,
+					},
+					&cli.StringFlag{
+						Name:  "go-template",
+						Usage: "Path to custom Go template file (optional, uses embedded default if not set)",
+					},
+					&cli.StringFlag{
+						Name:  "ts-template",
+						Usage: "Path to custom TypeScript template file (optional, uses embedded default if not set)",
+					},
+					&cli.BoolFlag{
+						Name:    "verbose",
+						Aliases: []string{"V"},
+						Usage:   "Show detailed progress during generation",
+					},
+					&cli.StringFlag{
+						Name:  "output",
+						Usage: "Output format: text (default) or json",
+						Value: "text",
 					},
 				},
 				Action: runGenerate,
@@ -97,25 +142,142 @@ func runGenerate(ctx *cli.Context) error {
 	buildWasm := ctx.Bool("wasm")
 	wasmOut := ctx.String("wasm-out")
 	compilerStr := ctx.String("compiler")
+	validationEnabled := ctx.Bool("validation")
+	goTemplatePath := ctx.String("go-template")
+	tsTemplatePath := ctx.String("ts-template")
+	dryRun := ctx.Bool("dry-run")
+	verbose := ctx.Bool("verbose")
+	outputFormat := ctx.String("output")
+	if outputFormat != "text" && outputFormat != "json" {
+		return fmt.Errorf("invalid output format: %s (must be text or json)", outputFormat)
+	}
 
-	g := generator.NewGenerator(moduleName, outDir, packageName, outDir, "")
+	start := time.Now()
 
-	if err := g.Generate(specPath, outDir); err != nil {
+	cfg := generator.NewConfig()
+	if moduleName != "" {
+		cfg.ModuleName = moduleName
+	}
+	if outDir != "" {
+		cfg.OutputModule = outDir
+	}
+	if packageName != "" {
+		cfg.Package = packageName
+	}
+	cfg.Validation = validationEnabled
+	cfg.Verbose = verbose
+	if goTemplatePath != "" {
+		cfg.GoTemplatePath = goTemplatePath
+	}
+	if tsTemplatePath != "" {
+		cfg.TSTemplatePath = tsTemplatePath
+	}
+
+	g := generator.NewGeneratorFromConfig(cfg)
+
+	// Helper to output JSON
+	outputJSON := func(out JSONOutput) {
+		out.Duration = time.Since(start).Milliseconds()
+		data, _ := json.MarshalIndent(out, "", "  ")
+		fmt.Println(string(data))
+	}
+
+	if dryRun {
+		result, err := g.GenerateDryRun(specPath, outDir)
+		if err != nil {
+			if outputFormat == "json" {
+				outputJSON(JSONOutput{
+					Success: false,
+					Error:   err.Error(),
+				})
+				os.Exit(1)
+			}
+			return err
+		}
+		if outputFormat == "json" {
+			files := make([]FileInfo, 0, len(result.Files))
+			for _, f := range result.Files {
+				files = append(files, FileInfo{Path: f.Path, Size: f.Size})
+			}
+			outputJSON(JSONOutput{
+				Success:   true,
+				Files:     files,
+				TotalSize: result.TotalSize,
+			})
+			return nil
+		}
+		// Text output
+		fmt.Println("Dry run: files that would be generated:")
+		for _, file := range result.Files {
+			fmt.Printf("  %s (%d bytes)\n", file.Path, file.Size)
+		}
+		fmt.Printf("\nTotal: %d file(s), %d bytes\n", len(result.Files), result.TotalSize)
+		return nil
+	}
+
+	genResult, err := g.Generate(specPath, outDir)
+	if err != nil {
+		if outputFormat == "json" {
+			outputJSON(JSONOutput{
+				Success: false,
+				Error:   err.Error(),
+			})
+			os.Exit(1)
+		}
 		return err
 	}
 
-	fmt.Printf("Generated SDK in %s\n", outDir)
+	if !verbose && outputFormat != "json" {
+		fmt.Printf("Generated SDK in %s\n", outDir)
+	}
 
 	if buildWasm {
+		if verbose && outputFormat != "json" {
+			fmt.Println("Building WASM...")
+		}
 		if err := runBuildWASM(outDir, wasmOut, compilerStr); err != nil {
+			if outputFormat == "json" {
+				outputJSON(JSONOutput{
+					Success: false,
+					Error:   err.Error(),
+				})
+				os.Exit(1)
+			}
 			return err
 		}
 	}
 
 	if !disableLint {
-		if err := runOxlint(outDir, oxlintrcPath); err != nil {
+		if verbose && outputFormat != "json" {
+			fmt.Println("Running oxlint...")
+		}
+		if err := runOxlint(outDir, oxlintrcPath, outputFormat == "json"); err != nil {
+			if outputFormat == "json" {
+				outputJSON(JSONOutput{
+					Success: false,
+					Error:   fmt.Sprintf("oxlint failed: %v", err),
+				})
+				os.Exit(1)
+			}
 			return fmt.Errorf("oxlint failed: %w", err)
 		}
+	}
+
+	if outputFormat == "json" {
+		files := make([]FileInfo, 0, len(genResult.Files))
+		for _, f := range genResult.Files {
+			files = append(files, FileInfo{Path: f.Path, Size: f.Size})
+		}
+		outputJSON(JSONOutput{
+			Success:   true,
+			Files:     files,
+			TotalSize: genResult.TotalSize,
+		})
+		return nil
+	}
+
+	if verbose && outputFormat != "json" {
+		fmt.Println("All done!")
 	}
 
 	return nil
@@ -151,7 +313,7 @@ func runBuildWASM(outDir, wasmOut, compilerStr string) error {
 	return nil
 }
 
-func runOxlint(targetDir, configPath string) error {
+func runOxlint(targetDir, configPath string, quiet bool) error {
 	var configFile string
 
 	if configPath != "" {
@@ -164,8 +326,13 @@ func runOxlint(targetDir, configPath string) error {
 	}
 
 	cmd := exec.Command("npx", "oxlint", "-c", configFile, "--no-ignore", targetDir)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	if quiet {
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+	} else {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("oxlint exit: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -68,6 +69,7 @@ func SetDefaultClient(config *ClientConfig) {
 type HTTPClient struct {
 	config     *ClientConfig
 	httpClient *http.Client
+	mu         sync.RWMutex
 }
 
 // NewHTTPClient creates a new HTTP client
@@ -91,12 +93,12 @@ func NewHTTPClient(config *ClientConfig) *HTTPClient {
 
 // Request represents an HTTP request
 type Request struct {
-	Method      string            `json:"method"`
-	Path        string            `json:"path"`
-	PathParams  map[string]string `json:"pathParams,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Query       map[string]string `json:"query,omitempty"`
-	Body        interface{}       `json:"body,omitempty"`
+	Method     string            `json:"method"`
+	Path       string            `json:"path"`
+	PathParams map[string]string `json:"pathParams,omitempty"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Query      url.Values        `json:"query,omitempty"`
+	Body       interface{}       `json:"body,omitempty"`
 }
 
 // Response represents an HTTP response
@@ -109,15 +111,22 @@ type Response struct {
 
 // Call makes an HTTP request and returns a Response
 func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) {
-	// Build URL
-	fullURL := c.buildURL(req.Path, req.Query)
+	// Build URL with path params
+	fullURL := c.buildURL(req.Path, req.PathParams, req.Query)
 
 	// Serialize body
 	var bodyReader io.Reader
 	if req.Body != nil {
 		bodyBytes, err := json.Marshal(req.Body)
 		if err != nil {
-			return nil, NewError(ErrCodeSerializationFail, "Failed to serialize request body", err.Error())
+			return nil, NewContextError(
+				ErrCodeSerializationFail,
+				"Failed to serialize request body",
+				err.Error(),
+				"client.go",
+				120,
+				"Ensure the request body contains only JSON-serializable types (string, number, bool, slice, map, struct)",
+			)
 		}
 		bodyReader = bytes.NewReader(bodyBytes)
 	}
@@ -125,13 +134,22 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	// Create HTTP request
 	httpReq, err := http.NewRequestWithContext(ctx, req.Method, fullURL, bodyReader)
 	if err != nil {
-		return nil, NewError(ErrCodeRequestFailed, "Failed to create request", err.Error())
+		return nil, NewContextError(
+			ErrCodeRequestFailed,
+			"Failed to create HTTP request",
+			err.Error(),
+			"client.go",
+			128,
+			"Check that the method is valid (GET, POST, PUT, DELETE, etc.) and the URL is well-formed",
+		)
 	}
 
-	// Set headers
+	// Set headers (protected by read lock)
+	c.mu.RLock()
 	for k, v := range c.config.Headers {
 		httpReq.Header.Set(k, v)
 	}
+	c.mu.RUnlock()
 	for k, v := range req.Headers {
 		httpReq.Header.Set(k, v)
 	}
@@ -146,16 +164,37 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	if err != nil {
 		// Check if it's a timeout
 		if urlErr, ok := err.(*url.Error); ok && urlErr.Timeout() {
-			return nil, NewError(ErrCodeTimeout, "Request timeout", err.Error())
+			return nil, NewContextError(
+				ErrCodeTimeout,
+				"Request timeout",
+				err.Error(),
+				"client.go",
+				149,
+				fmt.Sprintf("Increase the timeout value in ClientConfig (current: %v seconds)", c.config.Timeout),
+			)
 		}
-		return nil, NewError(ErrCodeNetworkError, "Network error", err.Error())
+		return nil, NewContextError(
+			ErrCodeNetworkError,
+			"Network error",
+			err.Error(),
+			"client.go",
+			151,
+			"Check network connectivity, verify the BaseURL is correct, and ensure the server is reachable",
+		)
 	}
 	defer resp.Body.Close()
 
 	// Read response body
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, NewError(ErrCodeRequestFailed, "Failed to read response", err.Error())
+		return nil, NewContextError(
+			ErrCodeRequestFailed,
+			"Failed to read response body",
+			err.Error(),
+			"client.go",
+			158,
+			"The response body may have been corrupted or the connection closed prematurely",
+		)
 	}
 
 	// Parse response
@@ -185,39 +224,41 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 
 // ResolvePath replaces path parameters and appends query parameters.
 // It detects and rejects path traversal attempts (e.g. "..").
-func ResolvePath(path string, pathParams map[string]string, query map[string]string) string {
+func ResolvePath(path string, pathParams map[string]string, query url.Values) string {
 	if path == "" {
 		path = "/"
 	}
 
 	for k, v := range pathParams {
-		// Reject path traversal attempts
-		if strings.Contains(v, "..") || strings.Contains(v, "//") {
-			v = ""
-		}
-		path = strings.ReplaceAll(path, "{"+k+"}", url.PathEscape(v))
+		path = strings.ReplaceAll(path, "{"+k+"}", url.PathEscape(safePathParam(v)))
 	}
 
-	if len(query) == 0 {
+	if query == nil || len(query) == 0 {
 		return path
-	}
-
-	params := url.Values{}
-	for k, v := range query {
-		params.Add(k, v)
 	}
 
 	sep := "?"
 	if strings.Contains(path, "?") {
 		sep = "&"
 	}
-	return path + sep + params.Encode()
+	return path + sep + query.Encode()
 }
 
-// buildURL constructs the full URL with query parameters
-func (c *HTTPClient) buildURL(path string, query map[string]string) string {
+func safePathParam(v string) string {
+	unescaped, err := url.PathUnescape(v)
+	if err != nil {
+		return ""
+	}
+	if strings.Contains(unescaped, "..") || strings.Contains(unescaped, "//") || strings.HasPrefix(unescaped, "/") {
+		return ""
+	}
+	return v
+}
+
+// buildURL constructs the full URL with path and query parameters
+func (c *HTTPClient) buildURL(path string, pathParams map[string]string, query url.Values) string {
 	base := strings.TrimRight(c.config.BaseURL, "/")
-	fullURL := ResolvePath(path, nil, query)
+	fullURL := ResolvePath(path, pathParams, query)
 	fullURL = strings.TrimLeft(fullURL, "/")
 
 	if base == "" {
@@ -232,11 +273,15 @@ func (c *HTTPClient) SetAuthToken(token string, scheme string) {
 	if scheme == "" {
 		scheme = "Bearer"
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.config.Headers["Authorization"] = scheme + " " + token
 }
 
 // ClearAuthToken removes the authorization header
 func (c *HTTPClient) ClearAuthToken() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	delete(c.config.Headers, "Authorization")
 }
 

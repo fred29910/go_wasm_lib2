@@ -176,6 +176,11 @@ func (o *OpenAPI) Operations() []*Operation {
 	return ops
 }
 
+// HasEnum returns true if the schema has enum values defined
+func (s *Schema) HasEnum() bool {
+	return len(s.Enum) > 0
+}
+
 // DefaultServer returns the first server URL or empty string
 func (o *OpenAPI) DefaultServer() string {
 	if len(o.Servers) == 0 {
