@@ -4,41 +4,53 @@
 
 ## 🔴 严重问题 (P0)
 
-### 1. 模板中 pathParams 覆盖问题 (已修复 ✅)
+> ✅ 所有 P0 问题已在当前版本中修复。
+
+### 1. 模板中 pathParams 覆盖问题 ✅ 已修复
 
 **文件**: `pkg/generator/templates/sdk.ts.tmpl`
 
-**问题**: 在生成 TypeScript 路径参数时，循环中的 `pathParams` 对象被覆盖，只有最后一个参数生效。
+**状态**: ✅ 已修复 — 当前模板正确生成 pathParams 映射。
 
-**状态**: ✅ 已修复 - 当前模板正确生成 pathParams 映射。
-
-### 2. Go 模板缺少 stringToString 函数 (已修复 ✅)
+### 2. Go 模板缺少 stringToString 函数 ✅ 已修复
 
 **文件**: `pkg/generator/templates/sdk.go.tmpl`
 
-**问题**: 当路径参数类型为 `string` 时，生成的代码调用 `stringToString()` 但模板未定义该函数。
+**状态**: ✅ 已修复 — 模板已包含 `stringToString` 辅助函数。
 
-**状态**: ✅ 已修复 - 模板已包含 `stringToString` 辅助函数。
-
-### 3. Makefile dev-generate 命令格式过时 (已修复 ✅)
+### 3. Makefile dev-generate 命令格式过时 ✅ 已修复
 
 **文件**: `Makefile`
 
-**问题**: `make dev-generate` 使用旧命令格式 `go run ./cmd/generator -spec=...`，与新的子命令结构不兼容。
+**状态**: ✅ 已修复 — Makefile 已更新为 `gowasm-generator generate -s ...`。
 
-**状态**: ✅ 已修复 - Makefile 已更新为 `gowasm-generator generate -s ...`。
+### 4. 并发数据竞争引发 Panic ✅ 已修复
+
+**文件**: `pkg/runtime/client.go`
+
+**问题**: `config.Headers` 的读写未加锁，`wasmCallAPI` 在 goroutine 中读取 Headers 时，JS 主线程调用 `wasmSetAuthToken` 写入 Map，导致 `Concurrent map iteration and map write` Panic。
+
+**状态**: ✅ 已修复 — `HTTPClient` 新增 `sync.RWMutex`（`c.mu`），`Call()` 使用 `RLock` 读取 Headers，`SetAuthToken()`/`ClearAuthToken()` 使用 `Lock` 写入。
+
+### 5. 路径参数插值完全瘫痪 ✅ 已修复
+
+**文件**: `pkg/runtime/exports.go`, `pkg/runtime/client.go`
+
+**问题**: `exports.go` 未解析 `pathParams`，`buildURL` 硬编码传 `nil` 给 `ResolvePath`。
+
+**状态**: ✅ 已修复 — `exports.go` 现在解析 `pathParams` 并传递给 `Request.PathParams`，`client.Call()` 将其传给 `buildURL` → `ResolvePath`。
 
 ## 🟠 重要问题 (P1)
 
 ### 1. 生成的 Go 代码与 WASM 运行时未完全集成
 
-**描述**: 生成的 `generated.go` 包含完整的类型定义和验证方法，但当前 WASM 运行时 (`exports.go` 的 `callAPI`) 直接忽略 `operationId`，使用通用的 HTTP 客户端调用。
+**描述**: 生成的 `generated.go` 包含完整的类型定义和验证方法，但当前 WASM 运行时 (`exports.go` 的 `callAPI`) 直接忽略 `operationId`（代码注释 `_ = args[0].String() // operationId for future use`），使用通用的 `client.Call` 兜底发送。
 
 **影响**: 生成的类型安全验证逻辑在浏览器中不生效。
 
 **建议方案**:
-- **方案 A (通用客户端)**: 如果定位是通用 HTTP 调用，移除 README 中关于 Go Type-safe 特性的说明，移除 `generated.go` 的生成逻辑。
-- **方案 B (强类型拦截)**: 若要实现完整的操作路由验证，需要让生成器输出 `main.go`（引入 `generated.go` 和 `runtime`），修改 `exports.go` 使 `callAPI` 通过 `operationID` 查找并执行相应的回调。
+- **方案 A (通用客户端)**: 若定位是通用 HTTP 调用，移除 README 中关于 Go Type-safe 特性的说明，移除 `generated.go` 的生成逻辑，仅保留 `sdk.ts`。
+- **方案 B (强类型拦截)**: 若要实现完整的操作路由验证，需要让生成器输出 `main.go`（引入 `generated.go` 和 `runtime`），修改 `exports.go` 使 `callAPI` 通过 `operationID` 去 `GetOperation(opId)` 并执行相应的回调。
 
 ### 2. 查询参数不支持多值数组
 
@@ -62,20 +74,20 @@
 
 **描述**: 当前系统分为 `runtime` 与 `generator` 两部分。生成器输出了 `generated.go` 代码，但官方默认编译为 WASM 的入口是 `cmd/runtime/main.go`，该入口仅导入泛用的底层客户端 (`ExportMain`)，完全没有导入用户生成的代码。
 
-**相关文档**: `docs/reviews/project_review.md:1-59`
+**相关文档**: `docs/reviews/project_review.md`
 
 ### 2. 缺乏单元测试
 
 **描述**: 整个项目无 `_test.go` 文件，核心逻辑（类型转换、模型构建、OpenAPI 解析）无测试覆盖。
 
-**风险**: 高风险 - 重构时容易引入回归 Bug。
+**风险**: 高风险 — 重构时容易引入回归 Bug。
 
 ### 3. 不支持 OpenAPI 高级特性
 
 **不支持的特性**:
-- `oneOf` / `anyOf` / `allOf` - 组合 schema
-- `discriminator` - 多态类型
-- 外部 `$ref` 引用 - 仅支持内部引用
+- `oneOf` / `anyOf` / `allOf` — 组合 schema
+- `discriminator` — 多态类型
+- 外部 `$ref` 引用 — 仅支持内部引用
 
 ### 4. 错误处理不一致
 
@@ -135,16 +147,17 @@
 | 架构设计 | 4 | 分层清晰，职责分离良好 |
 | 代码质量 | 3 | 核心逻辑可读，但有重复代码 |
 | 测试覆盖 | 1 | **完全无测试**，高风险 |
-| 文档完善 | 2 | 仅有代码注释，无用户文档（已改进 ✅） |
+| 文档完善 | 3 | 已建立完整 docs/ 文档体系 |
 | 工程化 | 3 | 构建脚本完善，缺 CI/CD |
-| 安全性 | 2 | 存在 XSS/原型污染风险（已部分修复 ✅） |
-| **综合** | **2.5** | 原型可用，生产需大量补强 |
+| 安全性 | 3 | 已修复并发和路径遍历风险，仍有 XSS 风险 |
+| **综合** | **2.8** | 原型可用，生产需大量补强 |
 
 ## 修改历史
 
 | 日期 | 修改内容 |
 |------|----------|
-| 2026-06-15 | 创建文档，记录已知问题 |
+| 2026-06-15 | 更新文档：标记 P0 问题已修复（并发安全、路径参数、模板修复） |
+| 2026-06-15 | 更新文档评分：文档完善 2→3，安全性 2→3，综合 2.5→2.8 |
 | 2026-06-15 | 创建完整 docs/ 文档目录 |
 | 2026-06-14 | 修复 pathParams 覆盖问题 |
 | 2026-06-14 | 添加 stringToString 函数 |

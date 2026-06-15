@@ -164,6 +164,48 @@ const pet = response.body;
 console.log('Created pet:', pet.name);
 ```
 
+## 代码检查 (oxlint)
+
+生成 SDK 后，可以使用 oxlint 检查生成的 TypeScript 代码质量：
+
+```bash
+# 检查生成的 TS 代码
+make lint-ts OUT=./output
+
+# 检查并自动修复问题
+make lint-ts-fix OUT=./output
+```
+
+oxlint 配置文件位于根目录 `oxlintrc.json`，可通过 `--oxlintrc` 标志使用自定义配置。
+
+## 自定义模板
+
+### 快速开始
+
+```bash
+# 使用自定义 Go 模板
+gowasm-generator generate -s openapi.yaml -o ./output --go-template ./my-go.tmpl
+
+# 使用自定义 TypeScript 模板
+gowasm-generator generate -s openapi.yaml -o ./output --ts-template ./my-tmpl
+
+# 同时使用两个自定义模板
+gowasm-generator generate -s openapi.yaml -o ./output \
+  --go-template ./my-go.tmpl \
+  --ts-template ./my-ts.tmpl
+```
+
+### 示例模板
+
+`examples/templates/` 目录包含现成的自定义模板示例：
+
+| 模板 | 说明 |
+|------|------|
+| `custom.go.tmpl` | 带分区注释和详细字段文档的 Go 模板 |
+| `custom.ts.tmpl` | 带 JSDoc 注释和类型化 API 函数的 TS 模板 |
+
+> 📖 模板变量和详细用法请参阅 [生成器 API 文档](./generator-api.md)。
+
 ## 运行测试
 
 ```bash
@@ -208,6 +250,7 @@ gowasm-generator init
 ## 下一步
 
 - 阅读 [CLI 参考文档](./cli-reference.md) 了解所有命令选项
-- 阅读 [运行时 API 文档](./runtime-api.md) 了解 WASM 导出函数
-- 阅读 [生成器 API 文档](./generator-api.md) 了解模板系统
+- 阅读 [运行时 API 文档](./runtime-api.md) 了解 WASM 导出函数和安全特性
+- 阅读 [生成器 API 文档](./generator-api.md) 了解模板系统和自定义模板变量
 - 查看 [示例](../examples/petstore/) 了解完整用法
+- 阅读 [架构文档](./architecture.md) 了解系统设计

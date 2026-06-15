@@ -6,8 +6,8 @@
 
 ```mermaid
 flowchart LR
-    Input[OpenAPI YAML] --> Parser[解析器]
-    Parser --> Model[模型构建]
+    Input[OpenAPI YAML] --> Parser[解析器<br/>openapi.go]
+    Parser --> Model[模型构建<br/>generator.go]
     Model --> Templates{模板渲染}
     Templates --> Go[generated.go]
     Templates --> Mod[go.mod]
@@ -16,32 +16,21 @@ flowchart LR
     Templates --> HTML[index.html]
 ```
 
-## 模板系统
+## 内置模板
 
-### 内置模板
+模板文件通过 `go:embed` 嵌入到二进制中，位于 `pkg/generator/templates/` 目录：
 
-模板文件位于 `pkg/generator/templates/` 目录：
-
-| 模板文件 | 用途 | 输出文件 |
-|----------|------|----------|
-| `sdk.go.tmpl` | Go 客户端代码 | `generated.go` |
-| `go.mod.tmpl` | Go 模块定义 | `go.mod` |
-| `main.go.tmpl` | WASM 入口 | `main.go` |
-| `sdk.ts.tmpl` | TypeScript SDK | `sdk.ts` |
-| `index.html.tmpl` | 演示页面 | `index.html` |
-
-### 模板引擎
-
-使用 Go 标准库 `text/template`，支持：
-
-- 条件渲染: `{{if .Condition}}...{{end}}`
-- 循环渲染: `{{range .Items}}...{{end}}`
-- 变量插值: `{{.VariableName}}`
-- 模板函数: `{{hasPrefix .Type "[]"}}`
+| 模板文件 | 行数 | 输出文件 | 用途 |
+|----------|------|----------|------|
+| `sdk.go.tmpl` | 295 | `generated.go` | Go 客户端：schema 结构体、请求/响应类型、验证方法、辅助函数 |
+| `sdk.ts.tmpl` | 170 | `sdk.ts` | TypeScript SDK：接口定义、WASMSDK 类、类型化 API 函数 |
+| `go.mod.tmpl` | 7 | `go.mod` | Go 模块定义 |
+| `main.go.tmpl` | 11 | `main.go` | WASM 入口文件 |
+| `index.html.tmpl` | 66 | `index.html` | 交互式演示页面（Tailwind CSS） |
 
 ### 自定义模板
 
-通过 CLI 标志使用自定义模板：
+通过 CLI 标志使用自定义模板文件覆盖内置模板：
 
 ```bash
 gowasm-generator generate \
@@ -50,6 +39,17 @@ gowasm-generator generate \
   --go-template ./my-go.tmpl \
   --ts-template ./my-ts.tmpl
 ```
+
+> 自定义模板使用 Go 标准库 `text/template` 语法，可以访问与内置模板完全相同的数据模型和函数。
+
+## 模板引擎
+
+使用 Go 标准库 `text/template`，支持：
+
+- 条件渲染: `{{if .Condition}}...{{end}}`
+- 循环渲染: `{{range .Items}}...{{end}}`
+- 变量插值: `{{.VariableName}}`
+- 模板函数: `{{hasPrefix .Type "[]"}}`
 
 ## 模板数据模型
 
@@ -180,6 +180,11 @@ package generated
 
 import (
     "context"
+    "fmt"
+    "net/url"
+    "reflect"
+    "strconv"
+
     runtime "github.com/fred29910/gowasm/pkg/runtime"
 )
 

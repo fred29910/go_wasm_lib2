@@ -176,7 +176,7 @@ try {
 #### 示例
 
 ```javascript
-// 设置 Bearer Token
+// 设置 Bearer token
 const result = window.wasmSetAuthToken('your-jwt-token');
 console.log(result.success); // true
 
@@ -265,6 +265,9 @@ interface WASMError {
   code: string;       // 错误码
   message: string;    // 错误消息
   details?: string;   // 详细信息
+  filePath?: string;  // 出错源文件
+  lineNumber?: number;// 出错行号
+  suggestion?: string;// 修复建议
 }
 ```
 
@@ -281,6 +284,43 @@ interface WASMError {
 | `DESERIALIZATION_FAILED` | 反序列化失败 | 响应体反序列化失败 |
 | `NETWORK_ERROR` | 网络错误 | 网络连接失败 |
 | `TIMEOUT` | 请求超时 | 请求超过配置的超时时间 |
+
+## 安全特性
+
+### 原型污染防护
+
+`converter.go` 在解析 JavaScript 对象时，自动过滤以下危险键：
+
+| 过滤的键 | 原因 |
+|----------|------|
+| `__proto__` | 可污染 Object.prototype |
+| `constructor` | 可篡改对象构造函数 |
+| `prototype` | 可修改原型链 |
+| `__defineGetter__` / `__defineSetter__` | 可注入恶意 getter/setter |
+| `hasOwnProperty` / `isPrototypeOf` / `propertyIsEnumerable` | 可破坏对象方法 |
+| `toString` / `valueOf` | 可篡改类型转换行为 |
+
+### 路径遍历防护
+
+`ResolvePath` → `safePathParam` 检测并拒绝的路径参数值：
+
+| 检测规则 | 示例（被拒绝） | 原因 |
+|----------|----------------|------|
+| 包含 `..` | `../../etc/passwd` | 目录遍历攻击 |
+| 包含 `//` | `//evil.com` | 路径混淆 |
+| 以 `/` 开头 | `/absolute/path` | 覆盖基础路径 |
+
+> ⚠️ 检测到非法值时返回空字符串（静默抹除）。建议始终调用 `Validate()` 方法验证输入。
+
+### 并发安全
+
+运行时使用 `sync.RWMutex` 保护三处共享状态：
+
+| 锁变量 | 保护对象 | 读操作 | 写操作 |
+|--------|----------|--------|--------|
+| `HTTPClient.mu` | `config.Headers` 和 `initialized` | `Call()` 读取 headers | `SetAuthToken()` / `ClearAuthToken()` / `initClient()` |
+| `operationsMu` | `operations` 注册表 | `GetOperation()` 查找处理函数 | `RegisterOperation()` 注册处理函数 |
+| `WASMExports.mu` | WASM 客户端状态 | `callAPI()` 等读取 `initialized` 和 `client` | `initClient()` 写入 |
 
 ## Promise 封装说明
 
@@ -300,7 +340,7 @@ flowchart LR
 
     subgraph Bridge["Promise 桥接"]
         P1[创建 Promise]
-        P2[Resolve/Rejecct]
+        P2[Resolve/Reject]
     end
 
     subgraph JS["JavaScript"]
@@ -318,8 +358,6 @@ flowchart LR
 
 ## 类型转换
 
-WASM 运行时使用 `vert` 库进行 Go ↔ JavaScript 类型转换。
-
 ### 支持的类型映射
 
 | Go 类型 | JavaScript 类型 |
@@ -332,33 +370,6 @@ WASM 运行时使用 `vert` 库进行 Go ↔ JavaScript 类型转换。
 | `map[string]T` | `Object` |
 | `struct` | `Object` (带 JSON tags) |
 | `nil` | `null` |
-
-### 安全特性
-
-- **原型污染防护**: 自动过滤 `__proto__`, `constructor`, `prototype` 等危险键
-- **路径遍历防护**: 路径参数会检查 `..`, `//`, `/` 开头的值
-
-## 并发安全
-
-运行时使用 `sync.RWMutex` 保护共享状态：
-
-```mermaid
-flowchart LR
-    subgraph Read["读操作"]
-        R1[RLock]
-        R2[读取 Headers]
-        R3[RUnlock]
-    end
-
-    subgraph Write["写操作"]
-        W1[Lock]
-        W2[写入/删除 Headers]
-        W3[Unlock]
-    end
-
-    R1 --> R2 --> R3
-    W1 --> W2 --> W3
-```
 
 ## 完整使用示例
 

@@ -138,6 +138,18 @@ All done!
 }
 ```
 
+### 生成文件结构
+
+```
+<output>/
+├── generated.go     # Go 客户端代码：schema 结构体、请求/响应类型、验证方法、辅助函数
+├── go.mod           # Go 模块定义
+├── main.go          # WASM 入口文件
+├── sdk.ts           # TypeScript SDK：接口定义、WASMSDK 类、类型化 API 函数
+├── index.html       # 交互式演示页面（Tailwind CSS）
+└── main.wasm        # 编译后的 WASM 二进制（--wasm=true 时）
+```
+
 ### 示例
 
 #### 基本生成
@@ -244,7 +256,7 @@ gowasm-generator init
 ```
 Creating sample project structure...
 Created directories: specs/, generated/, build/
-Next: place your spec in specs_ and run:
+Next: place your spec in specs/ and run:
   gowasm-generator generate -s specs/openapi.yaml -o generated/
 ```
 
@@ -285,6 +297,8 @@ make test               # 运行测试
 make test-compile       # 测试编译
 make verify             # 完整验证
 make clean              # 清理构建产物
+make lint-ts            # 对生成的 TS 代码运行 oxlint 检查
+make lint-ts-fix        # 对生成的 TS 代码运行 oxlint 并自动修复
 ```
 
 ### Makefile 示例
@@ -296,8 +310,11 @@ make generate SPEC=./api/openapi.yaml OUT=./output
 # Petstore 示例
 make dev-generate
 
-# 编译检查
+# 对生成的代码进行 TS 检查
 make lint-ts OUT=./output
+
+# 自动修复 TS 检查问题
+make lint-ts-fix OUT=./output
 ```
 
 ## Task 命令
@@ -314,4 +331,6 @@ task test               # 运行测试
 task test:compile       # 测试编译
 task verify             # 完整验证
 task clean              # 清理构建产物
+task lint-ts            # 对生成的 TS 代码运行 oxlint 检查
+task lint-ts-fix        # 对生成的 TS 代码运行 oxlint 并自动修复
 ```
