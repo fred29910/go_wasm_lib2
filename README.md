@@ -2,6 +2,8 @@
 
 A Go-based toolkit for building WebAssembly (WASM) HTTP clients and generating type-safe SDKs from OpenAPI 3.x specifications.
 
+> 📚 **完整文档**: 请参阅 [docs/](./docs/) 目录获取详细的架构设计、API 参考和开发指南。
+
 ## Overview
 
 This project provides two main components:
@@ -28,6 +30,8 @@ This project provides two main components:
 - Bearer token authentication support
 - Configurable timeout, headers, and credentials
 - Structured error handling with error codes (`INVALID_CONFIG`, `TIMEOUT`, etc.)
+- Prototype pollution protection in JS↔Go type conversion
+- Path traversal protection for URL parameters
 
 ### Generator Features
 - Generate Go client code for WASM runtime with request/response structs
@@ -39,6 +43,19 @@ This project provides two main components:
 - Type-safe request/response conversion (Go ↔ TypeScript)
 - Customizable output (module name, package name, output directory)
 - Configurable WASM compiler (auto/tinygo/go) via `--compiler` flag
+- Dry-run mode to preview generated files
+- JSON output mode for CI/CD integration
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/architecture.md](./docs/architecture.md) | System architecture with Mermaid diagrams |
+| [docs/getting-started.md](./docs/getting-started.md) | Quick start guide |
+| [docs/cli-reference.md](./docs/cli-reference.md) | CLI command reference |
+| [docs/runtime-api.md](./docs/runtime-api.md) | WASM runtime API documentation |
+| [docs/generator-api.md](./docs/generator-api.md) | Generator template system |
+| [docs/known-issues.md](./docs/known-issues.md) | Known issues and limitations |
 
 ## Quick Start
 
@@ -675,8 +692,13 @@ components:
 | Responses | ✅ Full | JSON response parsing |
 | Schemas | ✅ Full | Objects, arrays, primitives |
 | $ref | ✅ Full | Internal references (`#/components/schemas/...`) |
-| oneOf/anyOf/allOf | ⚠️ Partial | Not yet supported |
+| Validation | ✅ Full | Required, enum, format (email, uuid, date) |
+| oneOf/anyOf/allOf | ❌ Not supported | Planned |
 | External $ref | ❌ Not supported | Only internal references |
+| Query multi-value | ❌ Not supported | Single value per key |
+| FormData | ❌ Not supported | JSON only |
+
+> 📝 See [docs/known-issues.md](./docs/known-issues.md) for complete list of limitations.
 
 ## Build Systems
 
