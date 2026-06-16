@@ -1,0 +1,276 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  release:
+    types: [published]
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.25.1"
+  NODE_VERSION: "20"
+  TINYGO_VERSION: "0.41.1"
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Job 1: Lint & Static Analysis
+  # ──────────────────────────────────────────────
+  lint:
+    name: Lint & Vet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Check go.mod tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+  # ──────────────────────────────────────────────
+  # Job 2: Unit Tests
+  # ──────────────────────────────────────────────
+  test:
+    name: Test (Go ${{ matrix.go-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ["1.25.1"]
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+  # ──────────────────────────────────────────────
+  # Job 3: Build WASM (Standard Go)
+  # ──────────────────────────────────────────────
+  build-wasm-go:
+    name: Build WASM (Standard Go)
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build WASM
+        run: |
+          mkdir -p build
+          GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o build/main.wasm ./cmd/runtime
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-standard
+          path: build/main.wasm
+
+  # ──────────────────────────────────────────────
+  # Job 4: Build WASM (TinyGo)
+  # ──────────────────────────────────────────────
+  build-wasm-tinygo:
+    name: Build WASM (TinyGo)
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install TinyGo
+        run: |
+          wget -q https://github.com/tinygo-org/tinygo/releases/download/v${{ env.TINYGO_VERSION }}/tinygo_${{ env.TINYGO_VERSION }}_amd64.deb
+          sudo dpkg -i tinygo_${{ env.TINYGO_VERSION }}_amd64.deb
+          rm tinygo_${{ env.TINYGO_VERSION }}_amd64.deb
+          tinygo version
+
+      - name: Build WASM with TinyGo
+        run: |
+          mkdir -p build
+          tinygo build -o build/tinymain.wasm -target=wasm ./cmd/runtime
+
+      - name: Upload TinyGo WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-tinygo
+          path: build/tinymain.wasm
+
+  # ──────────────────────────────────────────────
+  # Job 5: Generate SDK from Petstore Example
+  # ──────────────────────────────────────────────
+  generate-sdk:
+    name: Generate SDK (Petstore Example)
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build generator
+        run: go build -o gowasm-generator ./cmd/generator
+
+      - name: Generate SDK
+        run: |
+          mkdir -p examples/petstore/generated
+          ./gowasm-generator generate \
+            -s examples/petstore/openapi.yaml \
+            -out=examples/petstore/generated \
+            --wasm=false
+
+      - name: Verify generated files
+        run: |
+          test -f examples/petstore/generated/generated.go
+          test -f examples/petstore/generated/sdk.ts
+          test -f examples/petstore/generated/go.mod
+          test -f examples/petstore/generated/main.go
+          test -f examples/petstore/generated/index.html
+          echo "All generated files present ✓"
+
+      - name: Upload generated SDK
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-sdk
+          path: examples/petstore/generated/
+
+  # ──────────────────────────────────────────────
+  # Job 6: Lint Generated TypeScript (oxlint)
+  # ──────────────────────────────────────────────
+  lint-ts:
+    name: Lint TypeScript (oxlint)
+    runs-on: ubuntu-latest
+    needs: [generate-sdk]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Download generated SDK
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-sdk
+          path: examples/petstore/generated/
+
+      - name: Install oxlint
+        run: npm ci
+
+      - name: Run oxlint
+        run: npx oxlint -c oxlintrc.json --no-ignore examples/petstore/generated/
+
+  # ──────────────────────────────────────────────
+  # Job 7: Full Verification (make verify)
+  # ──────────────────────────────────────────────
+  verify:
+    name: Full Verification
+    runs-on: ubuntu-latest
+    needs: [build-wasm-go, build-wasm-tinygo, generate-sdk, lint-ts]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Summary
+        run: |
+          echo "=== Build Summary ==="
+          echo "Standard Go WASM:"
+          ls -lh artifacts/wasm-standard/
+          echo ""
+          echo "TinyGo WASM:"
+          ls -lh artifacts/wasm-tinygo/
+          echo ""
+          echo "Generated SDK:"
+          ls -lh artifacts/generated-sdk/
+          echo ""
+          echo "All verifications passed ✓"
+
+  # ──────────────────────────────────────────────
+  # Job 8: Release (on tag publish)
+  # ──────────────────────────────────────────────
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    needs: [verify]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/wasm-standard/main.wasm
+            artifacts/wasm-tinygo/tinymain.wasm
+          fail_on_unmatched_files: false

@@ -1,0 +1,12 @@
+# Code Owners
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @fred29910
+
+# CI/CD workflows
+.github/workflows/ @fred29910
+
+# Documentation
+docs/ @fred29910
+*.md @fred29910
