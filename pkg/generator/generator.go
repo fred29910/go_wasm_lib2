@@ -74,7 +74,7 @@ func NewGeneratorFromConfig(cfg *Config) *Generator {
 
 func (g *Generator) progress(msg string) {
 	if g.verbose {
-		fmt.Println(msg)
+		fmt.Fprintln(os.Stderr, msg)
 	}
 }
 
@@ -407,7 +407,17 @@ func (g *Generator) extractInfo(doc *OpenAPI) (title, version string) {
 	if doc.Info == nil {
 		return "Generated API", "0.1.0"
 	}
-	return fmt.Sprint(doc.Info["title"]), fmt.Sprint(doc.Info["version"])
+	if t, ok := doc.Info["title"]; ok && t != nil {
+		title = fmt.Sprint(t)
+	} else {
+		title = "Generated API"
+	}
+	if v, ok := doc.Info["version"]; ok && v != nil {
+		version = fmt.Sprint(v)
+	} else {
+		version = "0.1.0"
+	}
+	return
 }
 
 // sortedSchemaMapKeys returns sorted keys from a Schema map.

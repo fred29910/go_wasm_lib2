@@ -6,8 +6,8 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"reflect"
 	"strconv"
+	"sync"
 
 	runtime "{{.Config.RuntimeImport}}"
 )
@@ -23,16 +23,42 @@ func (s {{.GoName}}) Validate() error {
 {{range .Properties}}{{if .Required}}	if s.{{.GoName}} == {{if eq .GoType "string"}}""{{else if eq .GoType "int"}}0{{else if eq .GoType "int64"}}int64(0){{else if eq .GoType "float64"}}0{{else if eq .GoType "bool"}}false{{else if hasPrefix .GoType "[]"}}nil{{else if hasPrefix .GoType "map["}}nil{{else}}nil{{end}} {
 		return fmt.Errorf("{{.Name}} is required")
 	}
-{{end}}{{if .EnumValues}}	if !isValidEnum(s.{{.GoName}}, []interface{}{ {{- range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}} }) {
-		return fmt.Errorf("{{.Name}} must be one of the allowed values: {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}%q{{else}}%v{{end}}{{end}}", {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}})
+{{end}}{{if .EnumValues}}	if !runtime.IsValidEnum(s.{{.GoName}}, []interface{}{ {{- range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}} }) {
+		return fmt.Errorf("{{.Name}} must be one of: {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{printf "%v" $v}}{{end}}")
 	}
-{{end}}{{if .Format}}	if !isValid{{if eq .Format "email"}}Email{{else if eq .Format "uuid"}}UUID{{else if eq .Format "date-time"}}DateTime{{else if eq .Format "date"}}DateTime{{end}}(s.{{.GoName}}) {
+{{end}}{{if .Format}}	if !{{if eq .Format "email"}}runtime.IsValidEmail{{else if eq .Format "uuid"}}runtime.IsValidUUID{{else if eq .Format "date-time"}}runtime.IsValidDateTime{{else if eq .Format "date"}}runtime.IsValidDateTime{{end}}(s.{{.GoName}}) {
 		return fmt.Errorf("{{.Name}} must be a valid {{.Format}}")
 	}
 {{end}}{{end}}	return nil
 }
 {{end}}
 {{end}}
+
+// APIClient is a generated client for the OpenAPI service.
+// Use NewAPIClient to create an instance with a specific configuration.
+type APIClient struct {
+	client     *runtime.HTTPClient
+	operations map[string]runtime.OperationHandler
+	mu         sync.RWMutex
+}
+
+// NewAPIClient creates a new APIClient with the given configuration.
+func NewAPIClient(cfg *runtime.ClientConfig) *APIClient {
+	c := &APIClient{
+		client:     runtime.NewHTTPClient(cfg),
+		operations: make(map[string]runtime.OperationHandler),
+	}
+	c.registerAll()
+	return c
+}
+
+// GetOperation returns a registered operation handler by operationId.
+func (c *APIClient) GetOperation(id string) (runtime.OperationHandler, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	h, ok := c.operations[id]
+	return h, ok
+}
 
 {{range .Operations}}
 // {{.RequestInterface}} ...
@@ -51,19 +77,19 @@ func (r {{.RequestInterface}}) Validate() error {
 {{range .PathParams}}{{if .Required}}	if r.{{.GoName}} == {{if eq .GoType "string"}}""{{else if eq .GoType "int"}}0{{else if eq .GoType "int64"}}int64(0){{else if eq .GoType "float64"}}0{{else if eq .GoType "bool"}}false{{else}}nil{{end}} {
 		return fmt.Errorf("{{.Name}} is required")
 	}
-{{end}}{{if .EnumValues}}	if !isValidEnum(r.{{.GoName}}, []interface{}{ {{- range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}} }) {
-		return fmt.Errorf("{{.Name}} must be one of the allowed values: {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}%q{{else}}%v{{end}}{{end}}", {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}})
+{{end}}{{if .EnumValues}}	if !runtime.IsValidEnum(r.{{.GoName}}, []interface{}{ {{- range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}} }) {
+		return fmt.Errorf("{{.Name}} must be one of: {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{printf "%v" $v}}{{end}}")
 	}
-{{end}}{{if .Format}}	if !isValid{{if eq .Format "email"}}Email{{else if eq .Format "uuid"}}UUID{{else if eq .Format "date-time"}}DateTime{{else if eq .Format "date"}}DateTime{{end}}(r.{{.GoName}}) {
+{{end}}{{if .Format}}	if !{{if eq .Format "email"}}runtime.IsValidEmail{{else if eq .Format "uuid"}}runtime.IsValidUUID{{else if eq .Format "date-time"}}runtime.IsValidDateTime{{else if eq .Format "date"}}runtime.IsValidDateTime{{end}}(r.{{.GoName}}) {
 		return fmt.Errorf("{{.Name}} must be a valid {{.Format}}")
 	}
 {{end}}{{end}}{{range .QueryParams}}{{if .Required}}	if r.{{.GoName}} == {{if eq .GoType "string"}}""{{else if eq .GoType "int"}}0{{else if eq .GoType "int64"}}int64(0){{else if eq .GoType "float64"}}0{{else if eq .GoType "bool"}}false{{else}}nil{{end}} {
 		return fmt.Errorf("{{.Name}} is required")
 	}
-{{end}}{{if .EnumValues}}	if !isValidEnum(r.{{.GoName}}, []interface{}{ {{- range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}} }) {
-		return fmt.Errorf("{{.Name}} must be one of the allowed values: {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}%q{{else}}%v{{end}}{{end}}", {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}})
+{{end}}{{if .EnumValues}}	if !runtime.IsValidEnum(r.{{.GoName}}, []interface{}{ {{- range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}} }) {
+		return fmt.Errorf("{{.Name}} must be one of: {{range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{printf "%v" $v}}{{end}}")
 	}
-{{end}}{{if .Format}}	if !isValid{{if eq .Format "email"}}Email{{else if eq .Format "uuid"}}UUID{{else if eq .Format "date-time"}}DateTime{{else if eq .Format "date"}}DateTime{{end}}(r.{{.GoName}}) {
+{{end}}{{if .Format}}	if !{{if eq .Format "email"}}runtime.IsValidEmail{{else if eq .Format "uuid"}}runtime.IsValidUUID{{else if eq .Format "date-time"}}runtime.IsValidDateTime{{else if eq .Format "date"}}runtime.IsValidDateTime{{end}}(r.{{.GoName}}) {
 		return fmt.Errorf("{{.Name}} must be a valid {{.Format}}")
 	}
 {{end}}{{end}}	return nil
@@ -94,18 +120,20 @@ func {{.RequestInterface}}ToRequest(params {{.RequestInterface}}) runtime.Reques
 {{end}}	}
 }
 
-// Call executes the {{.ID}} operation.
-func {{.RequestInterface}}Call(ctx context.Context, params {{.RequestInterface}}) (*runtime.Response, error) {
+// Call executes the {{.ID}} operation using the APIClient instance.
+func (c *APIClient) {{.RequestInterface}}Call(ctx context.Context, params {{.RequestInterface}}) (*runtime.Response, error) {
 	req := {{.RequestInterface}}ToRequest(params)
-	return runtime.DefaultClient.Call(ctx, &req)
+	return c.client.Call(ctx, &req)
 }
 {{end}}
 
 {{if .Operations}}
-func init() {
-{{range .Operations}}	runtime.RegisterOperation("{{.ID}}", func(ctx context.Context, req runtime.Request) (*runtime.Response, error) {
-		return runtime.DefaultClient.Call(ctx, &req)
-	})
+func (c *APIClient) registerAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+{{range .Operations}}	c.operations["{{.ID}}"] = func(ctx context.Context, req runtime.Request) (*runtime.Response, error) {
+		return c.client.Call(ctx, &req)
+	}
 {{end}}
 }
 {{end}}
@@ -137,159 +165,3 @@ func intToString(v int) string    { return strconv.Itoa(v) }
 func int64ToString(v int64) string { return strconv.FormatInt(v, 10) }
 func floatToString(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
 func boolToString(v bool) string   { return strconv.FormatBool(v) }
-
-func isValid(value interface{}) bool {
-	if value == nil {
-		return false
-	}
-	return !reflect.ValueOf(value).IsZero()
-}
-
-func isValidEnum(value interface{}, allowed []interface{}) bool {
-	for _, v := range allowed {
-		if fmt.Sprintf("%v", value) == fmt.Sprintf("%v", v) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
-}
-
-func isValidEmail(email string) bool {
-	if len(email) < 3 {
-		return false
-	}
-	atIndex := -1
-	for i, c := range email {
-		if c == '@' {
-			if atIndex != -1 {
-				return false
-			}
-			atIndex = i
-		}
-	}
-	if atIndex < 1 || atIndex >= len(email)-1 {
-		return false
-	}
-	domain := email[atIndex+1:]
-	dotIndex := -1
-	for i, c := range domain {
-		if c == '.' {
-			if dotIndex != -1 {
-				return false
-			}
-			dotIndex = i
-		}
-	}
-	if dotIndex < 1 || dotIndex >= len(domain)-1 {
-		return false
-	}
-	return true
-}
-
-func isValidUUID(uuid string) bool {
-	if len(uuid) != 36 {
-		return false
-	}
-	hexDigits := "0123456789abcdefABCDEF"
- isValidHex := func(s string) bool {
-		if len(s) == 0 {
-			return false
-		}
-		for _, c := range s {
-			found := false
-			for _, h := range hexDigits {
-				if c == h {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return false
-			}
-		}
-		return true
-	}
-	return isValidHex(uuid[0:8]) && uuid[8] == '-' &&
-		isValidHex(uuid[9:13]) && uuid[13] == '-' &&
-		isValidHex(uuid[14:18]) && uuid[18] == '-' &&
-		isValidHex(uuid[19:23]) && uuid[23] == '-' &&
-		isValidHex(uuid[24:36])
-}
-
-func isValidDateTime(dt string) bool {
-	if len(dt) < 10 {
-		return false
-	}
-	if dt[4] != '-' || dt[7] != '-' {
-		return false
-	}
-	isDigit := func(c byte) bool {
-		return c >= '0' && c <= '9'
-	}
-	for i := 0; i < 4; i++ {
-		if !isDigit(dt[i]) {
-			return false
-		}
-	}
-	for i := 5; i < 7; i++ {
-		if !isDigit(dt[i]) {
-			return false
-		}
-	}
-	for i := 8; i < 10; i++ {
-		if !isDigit(dt[i]) {
-			return false
-		}
-	}
-	if len(dt) == 10 {
-		return true
-	}
-	if dt[10] != 'T' {
-		return false
-	}
-	if len(dt) < 19 {
-		return false
-	}
-	if dt[13] != ':' || dt[16] != ':' {
-		return false
-	}
-	for i := 11; i < 13; i++ {
-		if !isDigit(dt[i]) {
-			return false
-		}
-	}
-	for i := 14; i < 16; i++ {
-		if !isDigit(dt[i]) {
-			return false
-		}
-	}
-	for i := 17; i < 19; i++ {
-		if !isDigit(dt[i]) {
-			return false
-		}
-	}
-	if len(dt) == 19 {
-		return true
-	}
-	if dt[19] == 'Z' {
-		return true
-	}
-	if (dt[19] == '+' || dt[19] == '-') && len(dt) == 25 && dt[22] == ':' {
-		for i := 20; i < 22; i++ {
-			if !isDigit(dt[i]) {
-				return false
-			}
-		}
-		for i := 23; i < 25; i++ {
-			if !isDigit(dt[i]) {
-				return false
-			}
-		}
-		return true
-	}
-	return false
-}

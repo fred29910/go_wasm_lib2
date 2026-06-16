@@ -8,7 +8,7 @@ all: build
 # Build with standard Go compiler
 build:
 	@echo "Building with standard Go compiler..."
-	GOOS=js GOARCH=wasm go build -trimpath -o build/main.wasm ./cmd/runtime
+	GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o build/main.wasm ./cmd/runtime
 	@echo "Standard Go WASM built: build/main.wasm"
 	@ls -lh build/main.wasm
 

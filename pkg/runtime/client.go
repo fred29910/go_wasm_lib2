@@ -8,10 +8,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 )
+
+// maxResponseBodySize limits response body reads to 10 MB (OOM protection).
+const maxResponseBodySize = 10 << 20
 
 // ClientConfig holds configuration for the HTTP client
 type ClientConfig struct {
@@ -119,12 +123,10 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	if req.Body != nil {
 		bodyBytes, err := json.Marshal(req.Body)
 		if err != nil {
-			return nil, NewContextError(
+			return nil, WrapWASMError(
 				ErrCodeSerializationFail,
 				"Failed to serialize request body",
-				err.Error(),
-				"client.go",
-				120,
+				err,
 				"Ensure the request body contains only JSON-serializable types (string, number, bool, slice, map, struct)",
 			)
 		}
@@ -134,12 +136,10 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	// Create HTTP request
 	httpReq, err := http.NewRequestWithContext(ctx, req.Method, fullURL, bodyReader)
 	if err != nil {
-		return nil, NewContextError(
+		return nil, WrapWASMError(
 			ErrCodeRequestFailed,
 			"Failed to create HTTP request",
-			err.Error(),
-			"client.go",
-			128,
+			err,
 			"Check that the method is valid (GET, POST, PUT, DELETE, etc.) and the URL is well-formed",
 		)
 	}
@@ -164,36 +164,30 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	if err != nil {
 		// Check if it's a timeout
 		if urlErr, ok := err.(*url.Error); ok && urlErr.Timeout() {
-			return nil, NewContextError(
+			return nil, WrapWASMError(
 				ErrCodeTimeout,
 				"Request timeout",
-				err.Error(),
-				"client.go",
-				149,
+				err,
 				fmt.Sprintf("Increase the timeout value in ClientConfig (current: %v seconds)", c.config.Timeout),
 			)
 		}
-		return nil, NewContextError(
+		return nil, WrapWASMError(
 			ErrCodeNetworkError,
 			"Network error",
-			err.Error(),
-			"client.go",
-			151,
+			err,
 			"Check network connectivity, verify the BaseURL is correct, and ensure the server is reachable",
 		)
 	}
 	defer resp.Body.Close()
 
-	// Read response body
-	bodyBytes, err := io.ReadAll(resp.Body)
+	// Read response body (capped at 10 MB for OOM protection)
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize))
 	if err != nil {
-		return nil, NewContextError(
+		return nil, WrapWASMError(
 			ErrCodeRequestFailed,
 			"Failed to read response body",
-			err.Error(),
-			"client.go",
-			158,
-			"The response body may have been corrupted or the connection closed prematurely",
+			err,
+			"The response body may have been corrupted, exceeded 10MB limit, or the connection closed prematurely",
 		)
 	}
 
@@ -222,16 +216,23 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	}, nil
 }
 
+var pathParamRe = regexp.MustCompile(`\{([^}]+)\}`)
+
 // ResolvePath replaces path parameters and appends query parameters.
 // It detects and rejects path traversal attempts (e.g. "..").
+// Uses regex for deterministic, single-pass replacement (avoids map-order injection).
 func ResolvePath(path string, pathParams map[string]string, query url.Values) string {
 	if path == "" {
 		path = "/"
 	}
 
-	for k, v := range pathParams {
-		path = strings.ReplaceAll(path, "{"+k+"}", url.PathEscape(safePathParam(v)))
-	}
+	path = pathParamRe.ReplaceAllStringFunc(path, func(match string) string {
+		key := match[1 : len(match)-1]
+		if v, exists := pathParams[key]; exists {
+			return url.PathEscape(safePathParam(v))
+		}
+		return match
+	})
 
 	if query == nil || len(query) == 0 {
 		return path
@@ -255,17 +256,20 @@ func safePathParam(v string) string {
 	return v
 }
 
-// buildURL constructs the full URL with path and query parameters
+// buildURL constructs the full URL with path and query parameters using url.JoinPath.
 func (c *HTTPClient) buildURL(path string, pathParams map[string]string, query url.Values) string {
-	base := strings.TrimRight(c.config.BaseURL, "/")
-	fullURL := ResolvePath(path, pathParams, query)
-	fullURL = strings.TrimLeft(fullURL, "/")
+	resolvedPath := ResolvePath(path, pathParams, query)
 
-	if base == "" {
-		return fullURL
+	if c.config.BaseURL == "" {
+		return resolvedPath
 	}
 
-	return base + "/" + fullURL
+	finalURL, err := url.JoinPath(c.config.BaseURL, resolvedPath)
+	if err != nil {
+		// Fallback: url.JoinPath should only fail on invalid base URLs
+		return c.config.BaseURL + resolvedPath
+	}
+	return finalURL
 }
 
 // SetAuthToken sets an authorization header

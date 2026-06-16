@@ -53,3 +53,4 @@ examples/*/generated/
 .comet/
 .codegraph/.gitignore
 generator
+.sisyphus/
