@@ -3,7 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>{{htmlEscape .InfoTitle}} - Debug Console</title>
+	<title>Petstore API - Debug Console</title>
 	<script src="https://cdn.tailwindcss.com"></script>
 	<script>
 		tailwind.config = {
@@ -42,7 +42,7 @@
 	<!-- Status Bar -->
 	<div id="statusBar" class="bg-gray-900 text-white px-4 py-2 flex items-center justify-between text-sm">
 		<div class="flex items-center gap-6">
-			<span class="font-semibold">{{htmlEscape .InfoTitle}} v{{htmlEscape .InfoVersion}}</span>
+			<span class="font-semibold">Petstore API v1.0.0</span>
 			<div class="flex items-center gap-2">
 				<span class="text-gray-400">WASM:</span>
 				<span id="wasmStatus" class="inline-flex items-center gap-1">
@@ -59,7 +59,7 @@
 			</div>
 		</div>
 		<div class="flex items-center gap-4">
-			<span id="baseUrlDisplay" class="text-gray-400 text-xs">{{htmlEscape .BaseURL}}</span>
+			<span id="baseUrlDisplay" class="text-gray-400 text-xs">https://petstore3.swagger.io/api/v3</span>
 			<button id="getConfigBtn" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs">Get Config</button>
 		</div>
 	</div>
@@ -75,7 +75,7 @@
 				<div class="p-4 space-y-3">
 					<div>
 						<label class="block text-sm font-medium text-gray-700 mb-1">Base URL</label>
-						<input type="text" id="cfgBaseUrl" value="{{htmlEscape .BaseURL}}" class="w-full px-3 py-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+						<input type="text" id="cfgBaseUrl" value="https://petstore3.swagger.io/api/v3" class="w-full px-3 py-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
 					</div>
 					<div>
 						<label class="block text-sm font-medium text-gray-700 mb-1">Timeout (seconds)</label>
@@ -161,75 +161,26 @@
 					<p class="text-xs text-gray-500 mt-1">Click an operation card to expand parameters, then execute</p>
 				</div>
 				<div id="operations" class="p-4 space-y-4">
-{{range .Operations}}
-					<div class="border rounded-lg overflow-hidden" data-operation-id="{{.ID}}">
-						<div class="operation-header px-4 py-3 bg-gray-50 cursor-pointer flex items-center justify-between" onclick="DebugConsole.toggleOperation('{{.ID}}')">
+					<div class="border rounded-lg overflow-hidden" data-operation-id="createPet">
+						<div class="operation-header px-4 py-3 bg-gray-50 cursor-pointer flex items-center justify-between" onclick="DebugConsole.toggleOperation('createPet')">
 							<div class="flex items-center gap-3">
-								<span class="method-{{toLower .Method}} text-white text-xs font-bold px-2 py-1 rounded uppercase">{{.Method}}</span>
+								<span class="method-post text-white text-xs font-bold px-2 py-1 rounded uppercase">POST</span>
 								<div>
-									<span class="font-medium text-sm">{{htmlEscape .Summary}}</span>
-									<span class="text-gray-500 text-xs ml-2 font-mono">{{htmlEscape .Path}}</span>
+									<span class="font-medium text-sm">Create a new pet</span>
+									<span class="text-gray-500 text-xs ml-2 font-mono">/pet</span>
 								</div>
 							</div>
-							<span class="text-gray-400 text-xs" id="chevron-{{.ID}}">&#9660;</span>
+							<span class="text-gray-400 text-xs" id="chevron-createPet">&#9660;</span>
 						</div>
-						<div class="operation-body hidden px-4 py-4 border-t bg-white" id="body-{{.ID}}">
+						<div class="operation-body hidden px-4 py-4 border-t bg-white" id="body-createPet">
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-{{if or .PathParams .QueryParams}}
 								<div class="space-y-3">
 									<h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Parameters</h4>
-{{range .PathParams}}
-									<div class="param-field">
-										<label class="block text-xs font-medium text-gray-600 mb-1">
-											{{htmlEscape .Name}}
-											{{if .Required}}<span class="text-red-500">*</span>{{end}}
-											<span class="text-gray-400">(path)</span>
-										</label>
-										<input type="text"
-											data-param-name="{{htmlEscape .Name}}"
-											data-param-type="path"
-											data-param-required="{{.Required}}"
-											data-ts-type="{{.TSType}}"
-											placeholder="{{htmlEscape .Name}}"
-											class="param-input w-full px-3 py-2 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-									</div>
-{{end}}
-{{range .QueryParams}}
-									<div class="param-field">
-										<label class="block text-xs font-medium text-gray-600 mb-1">
-											{{htmlEscape .Name}}
-											{{if .Required}}<span class="text-red-500">*</span>{{end}}
-											<span class="text-gray-400">(query)</span>
-										</label>
-{{if .EnumValues}}
-										<select data-param-name="{{htmlEscape .Name}}"
-											data-param-type="query"
-											data-param-required="{{.Required}}"
-											data-ts-type="{{.TSType}}"
-											class="param-input w-full px-3 py-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-											<option value="">-- select {{htmlEscape .Name}} --</option>
-{{range .EnumValues}}
-											<option value="{{htmlEscape .}}">{{htmlEscape .}}</option>
-{{end}}
-										</select>
-{{else}}
-										<input type="text"
-											data-param-name="{{htmlEscape .Name}}"
-											data-param-type="query"
-											data-param-required="{{.Required}}"
-											data-ts-type="{{.TSType}}"
-											placeholder="{{htmlEscape .Name}}"
-											class="param-input w-full px-3 py-2 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-{{end}}
-									</div>
-{{end}}
 								</div>
-{{end}}
-{{if .HasBody}}
 								<div class="space-y-3">
 									<h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Request Body</h4>
 									<div>
-										<label class="block text-xs font-medium text-gray-600 mb-1">Content Type: {{htmlEscape .BodyType}}</label>
+										<label class="block text-xs font-medium text-gray-600 mb-1">Content Type: Pet</label>
 										<textarea data-param-name="__body__"
 											data-param-type="body"
 											rows="8"
@@ -237,27 +188,107 @@
 											class="param-input w-full px-3 py-2 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
 									</div>
 								</div>
-{{end}}
-{{if not (or .PathParams .QueryParams .HasBody)}}
-								<div class="md:col-span-2 text-sm text-gray-400 italic">No parameters required</div>
-{{end}}
 							</div>
 							<div class="mt-4 flex items-center gap-3">
-								<button onclick="DebugConsole.callAPI('{{.ID}}')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded text-sm font-medium">Execute</button>
-								<span class="text-xs text-gray-400" id="result-{{.ID}}"></span>
+								<button onclick="DebugConsole.callAPI('createPet')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded text-sm font-medium">Execute</button>
+								<span class="text-xs text-gray-400" id="result-createPet"></span>
 							</div>
-							<div class="mt-4 hidden" id="response-{{.ID}}">
+							<div class="mt-4 hidden" id="response-createPet">
 								<h4 class="text-sm font-semibold text-gray-700 mb-2">Response</h4>
 								<div class="bg-gray-900 text-gray-100 rounded p-3 text-xs font-mono overflow-x-auto">
-									<pre id="responseBody-{{.ID}}"></pre>
+									<pre id="responseBody-createPet"></pre>
 								</div>
 							</div>
 						</div>
 					</div>
-{{end}}
-{{if not .Operations}}
-					<div class="text-center py-12 text-gray-400 text-sm">No operations defined</div>
-{{end}}
+					<div class="border rounded-lg overflow-hidden" data-operation-id="findPetsByStatus">
+						<div class="operation-header px-4 py-3 bg-gray-50 cursor-pointer flex items-center justify-between" onclick="DebugConsole.toggleOperation('findPetsByStatus')">
+							<div class="flex items-center gap-3">
+								<span class="method-get text-white text-xs font-bold px-2 py-1 rounded uppercase">GET</span>
+								<div>
+									<span class="font-medium text-sm">Find pets by status</span>
+									<span class="text-gray-500 text-xs ml-2 font-mono">/pet/findByStatus</span>
+								</div>
+							</div>
+							<span class="text-gray-400 text-xs" id="chevron-findPetsByStatus">&#9660;</span>
+						</div>
+						<div class="operation-body hidden px-4 py-4 border-t bg-white" id="body-findPetsByStatus">
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div class="space-y-3">
+									<h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Parameters</h4>
+									<div class="param-field">
+										<label class="block text-xs font-medium text-gray-600 mb-1">
+											status
+											<span class="text-gray-400">(query)</span>
+										</label>
+										<select data-param-name="status"
+											data-param-type="query"
+											data-param-required="false"
+											data-ts-type="string"
+											class="param-input w-full px-3 py-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+											<option value="">-- select status --</option>
+											<option value="available">available</option>
+											<option value="pending">pending</option>
+											<option value="sold">sold</option>
+										</select>
+									</div>
+								</div>
+							</div>
+							<div class="mt-4 flex items-center gap-3">
+								<button onclick="DebugConsole.callAPI('findPetsByStatus')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded text-sm font-medium">Execute</button>
+								<span class="text-xs text-gray-400" id="result-findPetsByStatus"></span>
+							</div>
+							<div class="mt-4 hidden" id="response-findPetsByStatus">
+								<h4 class="text-sm font-semibold text-gray-700 mb-2">Response</h4>
+								<div class="bg-gray-900 text-gray-100 rounded p-3 text-xs font-mono overflow-x-auto">
+									<pre id="responseBody-findPetsByStatus"></pre>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="border rounded-lg overflow-hidden" data-operation-id="getPetById">
+						<div class="operation-header px-4 py-3 bg-gray-50 cursor-pointer flex items-center justify-between" onclick="DebugConsole.toggleOperation('getPetById')">
+							<div class="flex items-center gap-3">
+								<span class="method-get text-white text-xs font-bold px-2 py-1 rounded uppercase">GET</span>
+								<div>
+									<span class="font-medium text-sm">Get pet by ID</span>
+									<span class="text-gray-500 text-xs ml-2 font-mono">/pet/{petId}</span>
+								</div>
+							</div>
+							<span class="text-gray-400 text-xs" id="chevron-getPetById">&#9660;</span>
+						</div>
+						<div class="operation-body hidden px-4 py-4 border-t bg-white" id="body-getPetById">
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div class="space-y-3">
+									<h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Parameters</h4>
+									<div class="param-field">
+										<label class="block text-xs font-medium text-gray-600 mb-1">
+											petId
+											<span class="text-red-500">*</span>
+											<span class="text-gray-400">(path)</span>
+										</label>
+										<input type="text"
+											data-param-name="petId"
+											data-param-type="path"
+											data-param-required="true"
+											data-ts-type="number"
+											placeholder="petId"
+											class="param-input w-full px-3 py-2 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+									</div>
+								</div>
+							</div>
+							<div class="mt-4 flex items-center gap-3">
+								<button onclick="DebugConsole.callAPI('getPetById')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded text-sm font-medium">Execute</button>
+								<span class="text-xs text-gray-400" id="result-getPetById"></span>
+							</div>
+							<div class="mt-4 hidden" id="response-getPetById">
+								<h4 class="text-sm font-semibold text-gray-700 mb-2">Response</h4>
+								<div class="bg-gray-900 text-gray-100 rounded p-3 text-xs font-mono overflow-x-auto">
+									<pre id="responseBody-getPetById"></pre>
+								</div>
+							</div>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -721,18 +752,36 @@
 
 	<script>
 		window.__debugConsoleOperations = [
-{{range .Operations}}
 			{
-				ID: '{{.ID}}',
-				Method: '{{.Method}}',
-				Path: '{{.Path}}',
-				Summary: '{{.Summary}}',
-				PathParams: {{if .PathParams}}[{{range $i, $p := .PathParams}}{{if $i}},{{end}}{ Name: '{{$p.Name}}', TSName: '{{$p.TSName}}', TSType: '{{$p.TSType}}', Required: {{$p.Required}} }{{end}}]{{else}}[]{{end}},
-				QueryParams: {{if .QueryParams}}[{{range $i, $p := .QueryParams}}{{if $i}},{{end}}{ Name: '{{$p.Name}}', TSName: '{{$p.TSName}}', TSType: '{{$p.TSType}}', Required: {{$p.Required}} }{{end}}]{{else}}[]{{end}},
-				HasBody: {{.HasBody}},
-				BodyType: '{{.BodyType}}'
+				ID: 'createPet',
+				Method: 'POST',
+				Path: '/pet',
+				Summary: 'Create a new pet',
+				PathParams: [],
+				QueryParams: [],
+				HasBody: true,
+				BodyType: 'Pet'
 			},
-{{end}}
+			{
+				ID: 'findPetsByStatus',
+				Method: 'GET',
+				Path: '/pet/findByStatus',
+				Summary: 'Find pets by status',
+				PathParams: [],
+				QueryParams: [{ Name: 'status', TSName: 'status', TSType: 'string', Required: false }],
+				HasBody: false,
+				BodyType: ''
+			},
+			{
+				ID: 'getPetById',
+				Method: 'GET',
+				Path: '/pet/{petId}',
+				Summary: 'Get pet by ID',
+				PathParams: [{ Name: 'petId', TSName: 'petId', TSType: 'number', Required: true }],
+				QueryParams: [],
+				HasBody: false,
+				BodyType: ''
+			}
 		];
 	</script>
 </body>

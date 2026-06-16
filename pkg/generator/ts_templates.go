@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	tt "text/template"
+	"unicode"
 )
 
 //go:embed templates/sdk.ts.tmpl
@@ -58,6 +59,14 @@ func (g *Generator) renderDemoHTMLTemplate(model GenerationModel) (*tt.Template,
 	// html/template's JS escaping breaks generated JS code inside <script> blocks.
 	tmpl := tt.Must(tt.New("index.html").Funcs(tt.FuncMap{
 		"htmlEscape": func(s string) string { return ht.HTMLEscapeString(s) },
+		"toLower": func(s string) string {
+			var b strings.Builder
+			b.Grow(len(s))
+			for _, r := range s {
+				b.WriteRune(unicode.ToLower(r))
+			}
+			return b.String()
+		},
 	}).Parse(demoHTMLTmpl))
 	return tmpl, model, nil
 }
