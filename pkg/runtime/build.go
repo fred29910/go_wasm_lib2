@@ -107,12 +107,6 @@ func BuildWASM(outPath, packagePath string, compiler Compiler) (*BuildResult, er
 
 func buildWithTinyGo(outPath, packagePath string) (*BuildResult, error) {
 	fmt.Printf("Building WASM with tinygo: %s -> %s\n", packagePath, outPath)
-	if err := runModTidy(packagePath); err != nil {
-		return nil, &BuildError{
-			Message: "go mod tidy failed before TinyGo build",
-			Inner:   err,
-		}
-	}
 	cmd := exec.Command("tinygo", "build", "-o", outPath, "-target=wasm", ".")
 	cmd.Dir = packagePath
 	if err := runBuildCommand(cmd); err != nil {
@@ -129,12 +123,6 @@ func buildWithTinyGo(outPath, packagePath string) (*BuildResult, error) {
 
 func buildWithGo(outPath, packagePath string) (*BuildResult, error) {
 	fmt.Printf("Building WASM with go: %s -> %s\n", packagePath, outPath)
-	if err := runModTidy(packagePath); err != nil {
-		return nil, &BuildError{
-			Message: "go mod tidy failed before Go build",
-			Inner:   err,
-		}
-	}
 	cmd := exec.Command("go", "build", "-trimpath", "-o", outPath, ".")
 	cmd.Dir = packagePath
 	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
@@ -150,7 +138,9 @@ func buildWithGo(outPath, packagePath string) (*BuildResult, error) {
 	return &BuildResult{Compiler: "go", Output: outPath}, nil
 }
 
-func runModTidy(packagePath string) error {
+// RunModTidy runs go mod tidy in the given directory.
+// It ensures go.mod and go.sum are consistent before building.
+func RunModTidy(packagePath string) error {
 	cmd := exec.Command("go", "mod", "tidy")
 	cmd.Dir = packagePath
 	cmd.Stdout = os.Stdout

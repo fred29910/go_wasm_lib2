@@ -119,7 +119,7 @@ func (g *Generator) Generate(specPath, outDir string) (*GenerationResult, error)
 	}{
 		{outDir, "generated.go"},
 		{outDir, "go.mod"},
-		{outDir, "main.go"},
+		{outDir, "cmd/wasm/main.go"},
 		{outDir, "sdk.ts"},
 		{outDir, "index.html"},
 	}

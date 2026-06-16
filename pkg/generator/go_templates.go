@@ -75,11 +75,12 @@ func (g *Generator) writeGoMod(outDir string, model GenerationModel) error {
 }
 
 func (g *Generator) writeGoMain(outDir string, model GenerationModel) error {
-	if err := os.MkdirAll(outDir, 0755); err != nil {
+	wasmDir := filepath.Join(outDir, "cmd", "wasm")
+	if err := os.MkdirAll(wasmDir, 0755); err != nil {
 		return err
 	}
 	tmpl := template.Must(template.New("main.go").Parse(goMainTmpl))
-	file, err := os.Create(filepath.Join(outDir, "main.go"))
+	file, err := os.Create(filepath.Join(wasmDir, "main.go"))
 	if err != nil {
 		return err
 	}

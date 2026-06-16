@@ -330,41 +330,70 @@
 					}
 				}
 
+				// Load the Go wasm_exec.js helper dynamically
+				function ensureWasmExec() {
+					return new Promise(function(resolve, reject) {
+						if (typeof Go !== 'undefined') {
+							resolve();
+							return;
+						}
+						var script = document.createElement('script');
+						script.src = 'wasm_exec.js';
+						script.onload = resolve;
+						script.onerror = function() {
+							reject(new Error(
+								'wasm_exec.js not found. Copy it from $(go env GOROOT)/misc/wasm/wasm_exec.js ' +
+								'and place it alongside this HTML file.'
+							));
+						};
+						document.head.appendChild(script);
+					});
+				}
+
+				// Load WASM binary: fetch main.wasm and instantiate with Go runtime
 				function load() {
-					return new Promise((resolve, reject) => {
+					return new Promise(function(resolve, reject) {
 						if (state.wasmLoaded) {
 							resolve();
 							return;
 						}
-						try {
-							var result = window.wasmInitClient({
-								baseUrl: state.baseUrl || document.getElementById('cfgBaseUrl').value,
-								timeout: state.timeout,
-								headers: state.headers
-							});
-							if (result && result.then) {
-								result.then(function() {
+						ensureWasmExec().then(function() {
+							var go = new Go();
+							fetch('main.wasm')
+								.then(function(resp) { return resp.arrayBuffer(); })
+								.then(function(bytes) { return WebAssembly.instantiate(bytes, go.importObject); })
+								.then(function(result) {
+									go.run(result.instance);
+									// After go.run(), Go's ExportMain() has set wasmInitClient etc.
+									if (typeof window.wasmInitClient !== 'function') {
+										reject(new Error(
+											'WASM loaded but wasmInitClient not found. ' +
+											'Ensure the WASM binary was built with the gowasm runtime.'
+										));
+										return;
+									}
 									state.wasmLoaded = true;
 									updateStatus();
 									resolve();
-								}).catch(function(err) {
-									reject(err);
+								})
+								.catch(function(err) {
+									reject(new Error('Failed to instantiate WASM: ' + err.message));
 								});
-							} else {
-								state.wasmLoaded = true;
-								updateStatus();
-								resolve();
-							}
-						} catch (e) {
-							reject(e);
-						}
+						}).catch(function(err) {
+							reject(err);
+						});
 					});
 				}
 
+				// Initialize the HTTP client via wasmInitClient (requires WASM loaded first)
 				function init() {
-					return new Promise((resolve, reject) => {
+					return new Promise(function(resolve, reject) {
 						if (state.clientInitialized) {
 							resolve();
+							return;
+						}
+						if (!state.wasmLoaded) {
+							reject(new Error('WASM not loaded. Click "Load WASM" first.'));
 							return;
 						}
 						try {
@@ -673,6 +702,7 @@
 					document.getElementById('loadBtn').addEventListener('click', function() {
 						load().then(function() {
 							console.log('WASM loaded successfully');
+							alert('WASM loaded. Now click "Init Client" to configure.');
 						}).catch(function(err) {
 							console.error('Failed to load WASM:', err);
 							alert('Failed to load WASM: ' + err.message);

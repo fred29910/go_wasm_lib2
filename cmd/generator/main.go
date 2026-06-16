@@ -304,7 +304,15 @@ func runBuildWASM(outDir, wasmOut, compilerStr string) error {
 		wasmOut = filepath.Join(outDir, "main.wasm")
 	}
 
-	result, err := runtime.BuildWASM(wasmOut, outDir, compiler)
+	// The WASM entry point lives in cmd/wasm/ under the output directory
+	wasmPkgDir := filepath.Join(outDir, "cmd", "wasm")
+
+	// Run go mod tidy from module root to ensure go.sum is up to date
+	if err := runtime.RunModTidy(outDir); err != nil {
+		return fmt.Errorf("go mod tidy failed: %w", err)
+	}
+
+	result, err := runtime.BuildWASM(wasmOut, wasmPkgDir, compiler)
 	if err != nil {
 		return fmt.Errorf("wasm build failed: %w", err)
 	}
