@@ -9,7 +9,7 @@
     "lint:ts:fix": "oxlint -c oxlintrc.json --no-ignore . --fix"
   },
   "devDependencies": {
-    "oxlint": "^0.15.0"
+    "oxlint": "^1.70.0"
   },
   "dependencies": {
     "@fission-ai/openspec": "^1.4.1"
