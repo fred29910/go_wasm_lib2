@@ -22,11 +22,11 @@ flowchart LR
 
 | 模板文件 | 行数 | 输出文件 | 用途 |
 |----------|------|----------|------|
-| `sdk.go.tmpl` | 295 | `generated.go` | Go 客户端：schema 结构体、请求/响应类型、验证方法、辅助函数 |
+| `sdk.go.tmpl` | 167 | `generated.go` | Go 客户端：schema 结构体、请求/响应类型、验证方法、辅助函数 |
 | `sdk.ts.tmpl` | 170 | `sdk.ts` | TypeScript SDK：接口定义、WASMSDK 类、类型化 API 函数 |
 | `go.mod.tmpl` | 7 | `go.mod` | Go 模块定义 |
 | `main.go.tmpl` | 11 | `main.go` | WASM 入口文件 |
-| `index.html.tmpl` | 66 | `index.html` | 交互式演示页面（Tailwind CSS） |
+| `index.html.tmpl` | 769 | `index.html` | 交互式演示页面（Tailwind CSS） |
 
 ### 自定义模板
 
@@ -182,8 +182,8 @@ import (
     "context"
     "fmt"
     "net/url"
-    "reflect"
     "strconv"
+    "sync"
 
     runtime "github.com/fred29910/gowasm/pkg/runtime"
 )
@@ -221,10 +221,26 @@ func GetPetByIdRequestToRequest(params GetPetByIdRequest) runtime.Request {
     }
 }
 
-// 调用函数
-func GetPetByIdRequestCall(ctx context.Context, params GetPetByIdRequest) (*runtime.Response, error) {
+// APIClient — 非全局单例，支持多实例并发访问不同后端
+type APIClient struct {
+    client     *runtime.HTTPClient
+    operations map[string]runtime.OperationHandler
+    mu         sync.RWMutex
+}
+
+func NewAPIClient(cfg *runtime.ClientConfig) *APIClient {
+    c := &APIClient{
+        client:     runtime.NewHTTPClient(cfg),
+        operations: make(map[string]runtime.OperationHandler),
+    }
+    c.registerAll()
+    return c
+}
+
+// 实例方法调用
+func (c *APIClient) GetPetByIdRequestCall(ctx context.Context, params GetPetByIdRequest) (*runtime.Response, error) {
     req := GetPetByIdRequestToRequest(params)
-    return runtime.DefaultClient.Call(ctx, &req)
+    return c.client.Call(ctx, &req)
 }
 
 // 验证方法 (如果 --validation=true)
@@ -233,13 +249,6 @@ func (r GetPetByIdRequest) Validate() error {
         return fmt.Errorf("petId is required")
     }
     return nil
-}
-
-// init 注册操作
-func init() {
-    runtime.RegisterOperation("getPetById", func(ctx context.Context, req runtime.Request) (*runtime.Response, error) {
-        return runtime.DefaultClient.Call(ctx, &req)
-    })
 }
 
 // 辅助函数
@@ -286,7 +295,10 @@ export class WASMSDK {
 
     async load(): Promise<void> { /* ... */ }
     async init(config: WASMConfig): Promise<void> { /* ... */ }
-    // ...
+    async callAPI(operationId: string, request: HTTPRequest): Promise<HTTPResponse> { /* ... */ }
+    setAuthToken(token: string, scheme?: string): void { /* ... */ }
+    clearAuthToken(): void { /* ... */ }
+    async getConfig(): Promise<WASMConfig | null> { /* ... */ }
 }
 
 // 类型化 API 方法
@@ -379,14 +391,16 @@ func (r CreatePetRequest) Validate() error {
 
 ### 支持的验证规则
 
-| 规则 | 说明 | 触发条件 |
-|------|------|----------|
-| 必填检查 | 确保字段不为零值 | `required: true` |
-| 枚举检查 | 确保字段值在允许列表中 | `enum: [...]` |
-| Email 格式 | 简单的 email 格式验证 | `format: email` |
-| UUID 格式 | UUID 格式验证 | `format: uuid` |
-| DateTime 格式 | ISO 8601 日期时间验证 | `format: date-time` |
-| Date 格式 | ISO 8601 日期验证 | `format: date` |
+| 规则 | 说明 | 触发条件 | 实际函数 |
+|------|------|----------|----------|
+| 必填检查 | 确保字段不为零值 | `required: true` | 模板内联检查 |
+| 枚举检查 | 确保字段值在允许列表中 | `enum: [...]` | `runtime.IsValidEnum()` |
+| Email 格式 | 基本的 email 格式验证 | `format: email` | `runtime.IsValidEmail()` |
+| UUID 格式 | UUID 格式验证 | `format: uuid` | `runtime.IsValidUUID()` |
+| DateTime 格式 | ISO 8601 日期时间验证 | `format: date-time` | `runtime.IsValidDateTime()` |
+| Date 格式 | ISO 8601 日期验证 | `format: date` | `runtime.IsValidDateTime()` |
+
+> 验证函数已从模板中抽取到 `pkg/runtime/validator.go`（174 行），作为 `runtime` 包的公开函数使用，避免每个生成的 SDK 重复内联这些函数，从而减小 WASM 体积。
 
 ## Dry Run 模式
 

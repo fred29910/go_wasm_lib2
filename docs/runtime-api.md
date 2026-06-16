@@ -89,6 +89,8 @@ try {
 | `operationId` | `string` | ✅ | 操作 ID（OpenAPI operationId） |
 | `request` | `HTTPRequest` | ✅ | 请求对象 |
 
+> **operationId 路由**: `callAPI` 会先通过 `GetOperation(operationID)` 查找已注册的自定义处理函数。如果找到，则执行该处理函数（可用于类型安全验证）；否则回退到通用的 `client.Call`。
+
 #### HTTPRequest 接口
 
 ```typescript
@@ -265,8 +267,8 @@ interface WASMError {
   code: string;       // 错误码
   message: string;    // 错误消息
   details?: string;   // 详细信息
-  filePath?: string;  // 出错源文件
-  lineNumber?: number;// 出错行号
+  filePath?: string;  // 出错源文件（自动捕获）
+  lineNumber?: number;// 出错行号（自动捕获）
   suggestion?: string;// 修复建议
 }
 ```
@@ -280,10 +282,16 @@ interface WASMError {
 | `NOT_INITIALIZED` | 未初始化 | 调用 API 前未初始化客户端 |
 | `INVALID_OPERATION` | 无效操作 | 操作 ID 无效或参数不足 |
 | `REQUEST_FAILED` | 请求失败 | HTTP 请求失败 |
-| `SERIALIZATION_FAILED` | 序列化失败 | 请求体序列化失败 |
+| `SERIALIZATION_FAILED` | 序列化失败 | 请求体/响应体序列化失败 |
 | `DESERIALIZATION_FAILED` | 反序列化失败 | 响应体反序列化失败 |
 | `NETWORK_ERROR` | 网络错误 | 网络连接失败 |
 | `TIMEOUT` | 请求超时 | 请求超过配置的超时时间 |
+
+### Go 侧错误处理特性
+
+- **自动捕获调用位置**: 通过 `WrapWASMError()` 和 `runtime.Caller(1)` 自动获取出错文件名和行号，无需硬编码
+- **支持 `errors.Is`/`errors.As`**: `WASMError` 实现了 `Unwrap() error` 接口，可与 Go 标准库错误处理生态无缝集成
+- **结构化错误**: 通过 `converter.go` 将 `WASMError` 转换为 JavaScript Error 对象，保留 `code`、`details` 等自定义属性
 
 ## 安全特性
 
@@ -302,7 +310,7 @@ interface WASMError {
 
 ### 路径遍历防护
 
-`ResolvePath` → `safePathParam` 检测并拒绝的路径参数值：
+`ResolvePath` 使用正则表达式 `\{([^}]+)\}` 进行确定性单次替换（避免 map 遍历顺序随机导致的参数注入），`safePathParam` 检测并拒绝的路径参数值：
 
 | 检测规则 | 示例（被拒绝） | 原因 |
 |----------|----------------|------|
@@ -311,6 +319,14 @@ interface WASMError {
 | 以 `/` 开头 | `/absolute/path` | 覆盖基础路径 |
 
 > ⚠️ 检测到非法值时返回空字符串（静默抹除）。建议始终调用 `Validate()` 方法验证输入。
+
+### OOM 防护
+
+`client.go` 的 `Call` 方法使用 `io.LimitReader(resp.Body, 10<<20)` 限制响应体最大读取 **10 MB**，防止恶意服务端返回超大报文导致 WASM 内存溢出。
+
+### URL 安全拼接
+
+`buildURL` 使用 `url.JoinPath()` 进行基础 URL 和路径的安全拼接，自动处理首尾斜杠冲突，避免双斜杠或路径截断问题。
 
 ### 并发安全
 

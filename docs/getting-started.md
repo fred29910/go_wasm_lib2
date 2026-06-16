@@ -5,7 +5,7 @@
 | 工具 | 版本 | 用途 | 必需 |
 |------|------|------|------|
 | Go | 1.25.1+ | 编译 Go 代码和 WASM | ✅ |
-| TinyGo | 任意 | 生成更小的 WASM 二进制 | ❌ |
+| TinyGo | 0.31.0+ | 生成更小的 WASM 二进制 | ❌ |
 | Node.js | 18+ | 运行 oxlint 检查生成的 TS 代码 | ❌ |
 | Task | 可选 | 替代 Make 的构建工具 | ❌ |
 
@@ -29,7 +29,7 @@ go mod download
 # macOS
 brew install tinygo
 
-# Linux
+# Linux (TinyGo 0.31.0)
 wget https://github.com/tinygo-org/tinygo/releases/download/v0.31.0/tinygo_0.31.0_amd64.deb
 sudo dpkg -i tinygo_0.31.0_amd64.deb
 ```

@@ -14,9 +14,9 @@ flowchart TB
 
     subgraph Generator["代码生成器 (pkg/generator)"]
         Parser[OpenAPI 解析器<br/>openapi.go<br/>191 行]
-        ModelBuilder[模型构建器<br/>generator.go<br/>562 行]
-        GoRenderer[Go 模板渲染器<br/>go_templates.go<br/>110 行]
-        TSRenderer[TypeScript 模板渲染器<br/>ts_templates.go<br/>105 行]
+        ModelBuilder[模型构建器<br/>generator.go<br/>582 行]
+        GoRenderer[Go 模板渲染器<br/>go_templates.go<br/>102 行]
+        TSRenderer[TypeScript 模板渲染器<br/>ts_templates.go<br/>114 行]
     end
 
     subgraph Output["生成产物"]
@@ -80,7 +80,7 @@ flowchart TB
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| `main.go` | 340 | CLI 应用入口，定义 `generate`、`init`、`version` 子命令 |
+| `main.go` | 348 | CLI 应用入口，定义 `generate`、`init`、`version` 子命令 |
 
 **支持的子命令：**
 
@@ -100,32 +100,33 @@ flowchart TB
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| `generator.go` | 562 | 核心生成逻辑：模型构建、编排 |
+| `generator.go` | 582 | 核心生成逻辑：模型构建、编排 |
 | `openapi.go` | 191 | OpenAPI 3.x 解析器 |
 | `types.go` | 200 | 类型定义和命名转换（含缩写词表：ID, URL, HTTP...） |
-| `go_templates.go` | 110 | Go 模板渲染逻辑 |
-| `ts_templates.go` | 105 | TypeScript 模板渲染逻辑 |
+| `go_templates.go` | 102 | Go 模板渲染逻辑 |
+| `ts_templates.go` | 114 | TypeScript 模板渲染逻辑 |
 
 ### 4. WASM 运行时核心 (`pkg/runtime/`)
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| `client.go` | 291 | HTTP 客户端实现，支持路径参数、查询参数、请求体 |
-| `exports.go` | 360 | JavaScript 导出函数（init/callAPI/auth/getConfig） |
+| `client.go` | 295 | HTTP 客户端实现，支持路径参数、查询参数、请求体 |
+| `exports.go` | 349 | JavaScript 导出函数（init/callAPI/auth/getConfig） |
 | `converter.go` | 295 | Go ↔ JavaScript 类型转换（通过 `vert` 库），含原型污染防护 |
 | `promise.go` | 94 | Promise 封装：CreatePromise / ResolvePromise / RejectPromise |
-| `error.go` | 108 | 结构化错误类型，含错误码、文件位置、行号、修复建议 |
-| `build.go` | 137 | WASM 构建工具（auto/tinygo/go 编译器选择） |
+| `error.go` | 138 | 结构化错误类型，含错误码、文件位置、行号、修复建议，支持 `Unwrap` |
+| `build.go` | 155 | WASM 构建工具（auto/tinygo/go 编译器选择） |
+| `validator.go` | 174 | 共享验证函数（email/uuid/datetime/enum），从模板中抽离以减小 WASM 体积 |
 
 ### 5. 内置模板 (`pkg/generator/templates/`)
 
 | 模板文件 | 行数 | 输出文件 | 用途 |
 |----------|------|----------|------|
-| `sdk.go.tmpl` | 295 | `generated.go` | Go 客户端代码：schema 结构体、请求/响应类型、验证方法、辅助函数 |
+| `sdk.go.tmpl` | 167 | `generated.go` | Go 客户端代码：schema 结构体、请求/响应类型、验证方法、辅助函数 |
 | `sdk.ts.tmpl` | 170 | `sdk.ts` | TypeScript SDK：接口定义、WASMSDK 类、类型化 API 函数 |
 | `go.mod.tmpl` | 7 | `go.mod` | Go 模块定义 |
 | `main.go.tmpl` | 11 | `main.go` | WASM 入口文件 |
-| `index.html.tmpl` | 66 | `index.html` | 交互式演示页面（Tailwind CSS） |
+| `index.html.tmpl` | 769 | `index.html` | 交互式演示页面（Tailwind CSS） |
 
 ### 6. 构建系统
 
@@ -151,10 +152,14 @@ var dangerousJSKeys = map[string]bool{
 
 ### 路径遍历防护
 
-`client.go` 的 `ResolvePath` → `safePathParam` 检测并拒绝：
+`client.go` 的 `ResolvePath` 使用正则表达式 `\{([^}]+)\}` 进行确定性的单次替换，避免了 map 遍历顺序随机导致的参数注入漏洞。`safePathParam` 检测并拒绝：
 - 包含 `..` 的路径值
 - 包含 `//` 的路径值
 - 以 `/` 开头的路径值
+
+### OOM 防护
+
+`client.go` 的 `Call` 方法使用 `io.LimitReader(resp.Body, 10<<20)` 限制响应体最大读取 10 MB，防止恶意服务端返回超大报文导致 WASM 内存溢出。
 
 ### 并发安全
 
@@ -188,15 +193,15 @@ flowchart LR
 
 ### 结构化错误处理
 
-`error.go` 的 `WASMError` 包含丰富的上下文信息：
+`error.go` 的 `WASMError` 包含丰富的上下文信息，并通过 `runtime.Caller` 自动捕获调用位置，支持 `Unwrap()` 以兼容 `errors.Is`/`errors.As`：
 
 ```go
 type WASMError struct {
     Code       string `json:"code"`       // 错误码，如 "TIMEOUT"
     Message    string `json:"message"`    // 人类可读的错误描述
     Details    string `json:"details"`    // 底层错误详情
-    FilePath   string `json:"filePath"`   // 出错源文件
-    LineNumber int    `json:"lineNumber"` // 出错行号
+    FilePath   string `json:"filePath"`   // 出错源文件（自动捕获）
+    LineNumber int    `json:"lineNumber"` // 出错行号（自动捕获）
     Suggestion string `json:"suggestion"` // 修复建议
 }
 ```
@@ -274,12 +279,11 @@ flowchart LR
     F --> H
     G --> H
     H --> I[client.Call]
-    I --> J[buildURL<br/>替换路径参数]
+    I --> J[buildURL<br/>url.JoinPath 拼接基础 URL + 正则替换路径参数]
     J --> K[序列化 Body]
     K --> L[http.NewRequest]
-    L --> M[设置 Headers]
     M --> N[http.Do]
-    N --> O[读取 Response]
+    N --> O[读取 Response<br/>LimitReader 10MB 上限]
     O --> P[JSON 反序列化]
     P --> Q[GoToJSValue]
     Q --> R[返回 JS Promise]
@@ -320,32 +324,33 @@ flowchart TB
 go_wasm_lib2/
 ├── cmd/
 │   ├── generator/
-│   │   └── main.go              # CLI 入口 (340 行)
+│   │   └── main.go              # CLI 入口 (348 行)
 │   └── runtime/
 │       └── main.go              # WASM 入口 (8 行)
 ├── pkg/
 │   ├── generator/
-│   │   ├── generator.go         # 核心生成逻辑 (562 行)
+│   │   ├── generator.go         # 核心生成逻辑 (582 行)
 │   │   ├── openapi.go           # OpenAPI 解析 (191 行)
 │   │   ├── types.go             # 类型定义 (200 行)
-│   │   ├── go_templates.go      # Go 模板渲染 (110 行)
-│   │   ├── ts_templates.go      # TS 模板渲染 (105 行)
+│   │   ├── go_templates.go      # Go 模板渲染 (102 行)
+│   │   ├── ts_templates.go      # TS 模板渲染 (114 行)
 │   │   ├── generator_test.go    # 生成器测试 (1718 行)
 │   │   ├── openapi_test.go      # 解析器测试 (626 行)
 │   │   └── types_test.go        # 类型测试 (193 行)
 │   │   └── templates/           # 模板文件
-│   │       ├── sdk.go.tmpl      # Go 客户端模板 (295 行)
+│   │       ├── sdk.go.tmpl      # Go 客户端模板 (167 行)
 │   │       ├── sdk.ts.tmpl      # TypeScript SDK 模板 (170 行)
 │   │       ├── go.mod.tmpl       # Go 模块模板 (7 行)
-│   │       ├── index.html.tmpl  # 演示页面模板 (66 行)
+│   │       ├── index.html.tmpl  # 演示页面模板 (769 行)
 │   │       └── main.go.tmpl     # WASM 入口模板 (11 行)
 │   └── runtime/
-│       ├── client.go            # HTTP 客户端 (291 行)
-│       ├── exports.go           # JS 导出 (360 行)
+│       ├── client.go            # HTTP 客户端 (295 行)
+│       ├── exports.go           # JS 导出 (349 行)
 │       ├── promise.go           # Promise 封装 (94 行)
 │       ├── converter.go         # 类型转换 (295 行)
-│       ├── error.go             # 错误定义 (108 行)
-│       ├── build.go             # 构建工具 (137 行)
+│       ├── error.go             # 错误定义 (138 行)
+│       ├── build.go             # 构建工具 (155 行)
+│       ├── validator.go         # 共享验证函数 (174 行)
 │       ├── build_test.go        # 构建测试 (152 行)
 │       └── client_test.go       # 客户端测试 (229 行)
 ├── version/
