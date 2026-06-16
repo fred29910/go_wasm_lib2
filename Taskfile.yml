@@ -24,7 +24,7 @@ tasks:
       GOARCH: wasm
     cmds:
       - "echo 'Building with standard Go compiler...'"
-      - "go build -trimpath -o {{.WASM_BINARY}} ./cmd/runtime"
+      - 'go build -trimpath -ldflags="-s -w" -o {{.WASM_BINARY}} ./cmd/runtime'
       - "echo 'Standard Go WASM built: {{.WASM_BINARY}}'"
       - "ls -lh {{.WASM_BINARY}}"
     sources:

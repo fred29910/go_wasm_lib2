@@ -22,30 +22,37 @@ type goTemplateData struct {
 	GenerationModel
 }
 
-func (g *Generator) writeGoClient(outDir string, model GenerationModel) error {
-	if err := os.MkdirAll(outDir, 0755); err != nil {
-		return err
-	}
+// renderGoTemplate sets up the Go client template with custom template detection,
+// shared by writeGoClient and renderGoClient to eliminate duplication.
+func (g *Generator) renderGoTemplate(model GenerationModel) (*template.Template, *goTemplateData, error) {
 	data := goTemplateData{GenerationModel: model}
 	funcMap := template.FuncMap{
 		"hasPrefix": func(s, prefix string) bool {
 			return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 		},
 	}
-
-	// Use custom template if provided, otherwise use embedded default
 	var tmplContent string
 	if g.config.GoTemplatePath != "" {
 		content, err := os.ReadFile(g.config.GoTemplatePath)
 		if err != nil {
-			return fmt.Errorf("read custom Go template: %w", err)
+			return nil, nil, fmt.Errorf("read custom Go template: %w", err)
 		}
 		tmplContent = string(content)
 	} else {
 		tmplContent = goClientTmpl
 	}
-
 	tmpl := template.Must(template.New("generated.go").Funcs(funcMap).Parse(tmplContent))
+	return tmpl, &data, nil
+}
+
+func (g *Generator) writeGoClient(outDir string, model GenerationModel) error {
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		return err
+	}
+	tmpl, data, err := g.renderGoTemplate(model)
+	if err != nil {
+		return err
+	}
 	file, err := os.Create(filepath.Join(outDir, "generated.go"))
 	if err != nil {
 		return err
@@ -82,26 +89,10 @@ func (g *Generator) writeGoMain(outDir string, model GenerationModel) error {
 
 // renderGoClient renders the Go client template to a string without writing to disk.
 func (g *Generator) renderGoClient(model GenerationModel) (string, error) {
-	data := goTemplateData{GenerationModel: model}
-	funcMap := template.FuncMap{
-		"hasPrefix": func(s, prefix string) bool {
-			return len(s) >= len(prefix) && s[:len(prefix)] == prefix
-		},
+	tmpl, data, err := g.renderGoTemplate(model)
+	if err != nil {
+		return "", err
 	}
-
-	// Use custom template if provided, otherwise use embedded default
-	var tmplContent string
-	if g.config.GoTemplatePath != "" {
-		content, err := os.ReadFile(g.config.GoTemplatePath)
-		if err != nil {
-			return "", fmt.Errorf("read custom Go template: %w", err)
-		}
-		tmplContent = string(content)
-	} else {
-		tmplContent = goClientTmpl
-	}
-
-	tmpl := template.Must(template.New("generated.go").Funcs(funcMap).Parse(tmplContent))
 	var buf strings.Builder
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", err
