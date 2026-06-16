@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 // BuildError represents an error that occurred during the build process
@@ -67,6 +68,11 @@ type BuildResult struct {
 //   - CompilerTinyGo: requires tinygo (returns error if not found)
 //   - CompilerGo: uses standard go compiler
 func BuildWASM(outPath, packagePath string, compiler Compiler) (*BuildResult, error) {
+	// Resolve outPath to absolute so it works correctly when cmd.Dir is set to packagePath
+	if absPath, err := filepath.Abs(outPath); err == nil {
+		outPath = absPath
+	}
+
 	useTinyGo := false
 
 	switch compiler {
@@ -101,6 +107,12 @@ func BuildWASM(outPath, packagePath string, compiler Compiler) (*BuildResult, er
 
 func buildWithTinyGo(outPath, packagePath string) (*BuildResult, error) {
 	fmt.Printf("Building WASM with tinygo: %s -> %s\n", packagePath, outPath)
+	if err := runModTidy(packagePath); err != nil {
+		return nil, &BuildError{
+			Message: "go mod tidy failed before TinyGo build",
+			Inner:   err,
+		}
+	}
 	cmd := exec.Command("tinygo", "build", "-o", outPath, "-target=wasm", ".")
 	cmd.Dir = packagePath
 	if err := runBuildCommand(cmd); err != nil {
@@ -117,6 +129,12 @@ func buildWithTinyGo(outPath, packagePath string) (*BuildResult, error) {
 
 func buildWithGo(outPath, packagePath string) (*BuildResult, error) {
 	fmt.Printf("Building WASM with go: %s -> %s\n", packagePath, outPath)
+	if err := runModTidy(packagePath); err != nil {
+		return nil, &BuildError{
+			Message: "go mod tidy failed before Go build",
+			Inner:   err,
+		}
+	}
 	cmd := exec.Command("go", "build", "-trimpath", "-o", outPath, ".")
 	cmd.Dir = packagePath
 	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
@@ -130,6 +148,14 @@ func buildWithGo(outPath, packagePath string) (*BuildResult, error) {
 		}
 	}
 	return &BuildResult{Compiler: "go", Output: outPath}, nil
+}
+
+func runModTidy(packagePath string) error {
+	cmd := exec.Command("go", "mod", "tidy")
+	cmd.Dir = packagePath
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func runBuildCommand(cmd *exec.Cmd) error {

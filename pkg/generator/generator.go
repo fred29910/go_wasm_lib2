@@ -272,7 +272,7 @@ func (g *Generator) buildSchemas(doc *OpenAPI) []GeneratedSchema {
 				TSType:     g.tsType(&propSchema, required),
 				Required:   required,
 				EnumValues: propSchema.Enum,
-				Format:     propSchema.Format,
+				Format:     formatForValidation(propSchema.Type, propSchema.Format),
 			})
 		}
 		schemas = append(schemas, s)
@@ -321,7 +321,7 @@ func (g *Generator) buildOperation(op *Operation) GeneratedOperation {
 			In:         p.In,
 			Required:   p.Required,
 			EnumValues: p.Schema.Enum,
-			Format:     p.Schema.Format,
+			Format:     formatForValidation(p.Schema.Type, p.Schema.Format),
 		}
 		if p.In == "path" {
 			genOp.PathParams = append(genOp.PathParams, param)
@@ -428,6 +428,16 @@ func sortedSchemaMapKeys(m map[string]Schema) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// formatForValidation returns the format string only for types where format-based
+// validation makes sense (string types). For numeric/integer formats like "int64",
+// "int32", format is a type hint, not a validation constraint.
+func formatForValidation(schemaType, format string) string {
+	if schemaType == "string" {
+		return format
+	}
+	return ""
 }
 
 func (g *Generator) goType(schema *Schema, required bool) string {

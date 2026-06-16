@@ -75,7 +75,7 @@ tasks:
     deps: [build:runtime]
     cmds:
       - "mkdir -p examples/petstore/generated"
-      - "go run ./cmd/generator -spec=examples/petstore/openapi.yaml -out=examples/petstore/generated"
+      - "go run ./cmd/generator generate -spec=examples/petstore/openapi.yaml -out=examples/petstore/generated"
 
   build:runtime:
     desc: Build the runtime for code generation
@@ -128,9 +128,9 @@ tasks:
   install:tinygo:linux:
     desc: Install TinyGo on Linux
     cmds:
-      - "wget https://github.com/tinygo-org/tinygo/releases/download/v0.31.0/tinygo_0.31.0_amd64.deb"
-      - "sudo dpkg -i tinygo_0.31.0_amd64.deb"
-      - "rm tinygo_0.31.0_amd64.deb"
+      - "wget https://github.com/tinygo-org/tinygo/releases/download/v0.41.1/tinygo_0.41.1_amd64.deb"
+      - "sudo dpkg -i tinygo_0.41.1_amd64.deb"
+      - "rm tinygo_0.41.1_amd64.deb"
 
   verify:tinygo:
     desc: Verify TinyGo installation

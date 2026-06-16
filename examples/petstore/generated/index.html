@@ -161,6 +161,7 @@
 					<p class="text-xs text-gray-500 mt-1">Click an operation card to expand parameters, then execute</p>
 				</div>
 				<div id="operations" class="p-4 space-y-4">
+
 					<div class="border rounded-lg overflow-hidden" data-operation-id="createPet">
 						<div class="operation-header px-4 py-3 bg-gray-50 cursor-pointer flex items-center justify-between" onclick="DebugConsole.toggleOperation('createPet')">
 							<div class="flex items-center gap-3">
@@ -174,9 +175,8 @@
 						</div>
 						<div class="operation-body hidden px-4 py-4 border-t bg-white" id="body-createPet">
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div class="space-y-3">
-									<h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Parameters</h4>
-								</div>
+
+
 								<div class="space-y-3">
 									<h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Request Body</h4>
 									<div>
@@ -188,6 +188,8 @@
 											class="param-input w-full px-3 py-2 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
 									</div>
 								</div>
+
+
 							</div>
 							<div class="mt-4 flex items-center gap-3">
 								<button onclick="DebugConsole.callAPI('createPet')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded text-sm font-medium">Execute</button>
@@ -201,6 +203,7 @@
 							</div>
 						</div>
 					</div>
+
 					<div class="border rounded-lg overflow-hidden" data-operation-id="findPetsByStatus">
 						<div class="operation-header px-4 py-3 bg-gray-50 cursor-pointer flex items-center justify-between" onclick="DebugConsole.toggleOperation('findPetsByStatus')">
 							<div class="flex items-center gap-3">
@@ -214,25 +217,32 @@
 						</div>
 						<div class="operation-body hidden px-4 py-4 border-t bg-white" id="body-findPetsByStatus">
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
 								<div class="space-y-3">
 									<h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Parameters</h4>
+
+
 									<div class="param-field">
 										<label class="block text-xs font-medium text-gray-600 mb-1">
 											status
+											
 											<span class="text-gray-400">(query)</span>
 										</label>
-										<select data-param-name="status"
+
+										<input type="text"
+											data-param-name="status"
 											data-param-type="query"
 											data-param-required="false"
 											data-ts-type="string"
-											class="param-input w-full px-3 py-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-											<option value="">-- select status --</option>
-											<option value="available">available</option>
-											<option value="pending">pending</option>
-											<option value="sold">sold</option>
-										</select>
+											placeholder="status"
+											class="param-input w-full px-3 py-2 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+
 									</div>
+
 								</div>
+
+
+
 							</div>
 							<div class="mt-4 flex items-center gap-3">
 								<button onclick="DebugConsole.callAPI('findPetsByStatus')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded text-sm font-medium">Execute</button>
@@ -246,6 +256,7 @@
 							</div>
 						</div>
 					</div>
+
 					<div class="border rounded-lg overflow-hidden" data-operation-id="getPetById">
 						<div class="operation-header px-4 py-3 bg-gray-50 cursor-pointer flex items-center justify-between" onclick="DebugConsole.toggleOperation('getPetById')">
 							<div class="flex items-center gap-3">
@@ -259,8 +270,10 @@
 						</div>
 						<div class="operation-body hidden px-4 py-4 border-t bg-white" id="body-getPetById">
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
 								<div class="space-y-3">
 									<h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Parameters</h4>
+
 									<div class="param-field">
 										<label class="block text-xs font-medium text-gray-600 mb-1">
 											petId
@@ -275,7 +288,12 @@
 											placeholder="petId"
 											class="param-input w-full px-3 py-2 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
 									</div>
+
+
 								</div>
+
+
+
 							</div>
 							<div class="mt-4 flex items-center gap-3">
 								<button onclick="DebugConsole.callAPI('getPetById')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded text-sm font-medium">Execute</button>
@@ -289,6 +307,8 @@
 							</div>
 						</div>
 					</div>
+
+
 				</div>
 			</div>
 		</div>
@@ -752,6 +772,7 @@
 
 	<script>
 		window.__debugConsoleOperations = [
+
 			{
 				ID: 'createPet',
 				Method: 'POST',
@@ -762,6 +783,7 @@
 				HasBody: true,
 				BodyType: 'Pet'
 			},
+
 			{
 				ID: 'findPetsByStatus',
 				Method: 'GET',
@@ -772,16 +794,18 @@
 				HasBody: false,
 				BodyType: ''
 			},
+
 			{
 				ID: 'getPetById',
 				Method: 'GET',
 				Path: '/pet/{petId}',
 				Summary: 'Get pet by ID',
-				PathParams: [{ Name: 'petId', TSName: 'petId', TSType: 'number', Required: true }],
+				PathParams: [{ Name: 'petId', TSName: 'petID', TSType: 'number', Required: true }],
 				QueryParams: [],
 				HasBody: false,
 				BodyType: ''
-			}
+			},
+
 		];
 	</script>
 </body>
