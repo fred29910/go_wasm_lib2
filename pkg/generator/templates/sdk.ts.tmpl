@@ -18,7 +18,7 @@ export interface HTTPRequest {
 	path: string;
 	pathParams?: Record<string, string>;
 	headers?: Record<string, string>;
-	query?: Record<string, string>;
+	query?: Record<string, string | string[] | number | boolean | null>;
 	body?: any;
 }
 
@@ -34,7 +34,7 @@ export interface {{.RequestInterface}} {
 {{range .PathParams}}	{{.TSName}}{{if not .Required}}?{{end}}: {{.TSType}};
 {{end}}{{range .QueryParams}}	{{.TSName}}{{if not .Required}}?{{end}}: {{.TSType}};
 {{end}}	pathParams?: Record<string, string>;
-	query?: Record<string, string>;
+	query?: Record<string, string | string[] | number | boolean | null>;
 	headers?: Record<string, string>;
 {{if .HasBody}}	body?: {{.BodyType}};
 {{end}}
@@ -91,21 +91,52 @@ export class WASMSDK {
 			throw new Error('WASM SDK can only be used in browser environment');
 		}
 
-		const response = await fetch(this.wasmUrl);
-		const bytes = await response.arrayBuffer();
-		const wasmModule = await WebAssembly.instantiate(bytes, {
-			env: {
-				// Go WASM imports
-			}
-		});
+		// Go WASM requires wasm_exec.js runtime to be loaded first.
+		// It must be served alongside main.wasm and loaded before instantiation.
+		await this.loadScript('wasm_exec.js');
 
-		// Make exports available
-		const { instance } = wasmModule;
-		if (instance && instance.exports) {
-			for (const [key, value] of Object.entries(instance.exports)) {
-				(window as any)[key] = value;
-			}
+		const go = (window as any).Go;
+		if (!go) {
+			throw new Error('Go runtime (wasm_exec.js) not found. Ensure wasm_exec.js is loaded before calling load().');
 		}
+
+		const result = await WebAssembly.instantiateStreaming(
+			fetch(this.wasmUrl),
+			new go.importObject(),
+		);
+		new go.run(result.instance);
+
+		// Wait for WASM ready signal
+		await this.waitForReady();
+	}
+
+	private loadScript(src: string): Promise<void> {
+		return new Promise((resolve, reject) => {
+			const script = document.createElement('script');
+			script.src = src;
+			script.onload = () => resolve();
+			script.onerror = () => reject(new Error(`Failed to load ${src}`));
+			document.head.appendChild(script);
+		});
+	}
+
+	private waitForReady(): Promise<void> {
+		return new Promise((resolve, reject) => {
+			const timeout = 10000;
+			const start = Date.now();
+			const check = () => {
+				if ((window as any).wasmReady === true) {
+					resolve();
+					return;
+				}
+				if (Date.now() - start > timeout) {
+					reject(new Error('WASM initialization timeout'));
+					return;
+				}
+				setTimeout(check, 50);
+			};
+			check();
+		});
 	}
 
 	async init(config: WASMConfig): Promise<void> {

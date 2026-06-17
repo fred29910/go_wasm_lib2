@@ -9,6 +9,8 @@ A Go-based toolkit for building WebAssembly (WASM) HTTP clients and generating t
 - **Dual Compiler Support** — Standard Go (2-5MB) or TinyGo (200-500KB) for smaller binaries
 - **Type-Safe** — Auto-generate TypeScript interfaces and typed API functions from OpenAPI schemas
 - **Secure** — Prototype pollution protection, path traversal prevention, structured error codes
+- **Structured Logging** — `log/slog` based logging with key-value output for machine readability
+- **Tested** — 6 test packages with race condition detection (`make test-race`)
 
 ## Quick Start
 
@@ -68,8 +70,27 @@ const response = await window.wasmCallAPI('getUsers', {
 | `make build` | `build/main.wasm` | 2-5 MB |
 | `make build-tinygo` | `build/tinymain.wasm` | 200-500 KB |
 | `make generate` | `<out>/` | depends on compiler |
+| `make test` | — | Run all tests |
+| `make test-race` | — | Run tests with race detection |
+| `make verify` | — | Full project verification |
 
 > Supports both `make` and `task` (Taskfile) build systems.
+
+## CLI Usage
+
+```bash
+gowasm-generator generate \
+  -s ./api/openapi.yaml \        # OpenAPI spec (required)
+  -o ./output \                  # Output directory (default: ./generated)
+  -m github.com/myorg/myproject \ # Go module name
+  -p apiclient \                 # Go package name
+  --compiler tinygo \            # Compiler: auto|tinygo|go (default: auto)
+  --wasm \                       # Build WASM after generation (default: false)
+  --wasm-out ./build/sdk.wasm \  # WASM output path
+  --validation \                 # Generate validation methods (default: true)
+  -V, --verbose \                # Detailed progress
+  --dry-run                      # Preview mode
+```
 
 ## Documentation
 
@@ -81,6 +102,8 @@ const response = await window.wasmCallAPI('getUsers', {
 | [docs/runtime-api.md](docs/runtime-api.md) | WASM exported functions and error codes |
 | [docs/generator-api.md](docs/generator-api.md) | Template system and custom template variables |
 | [docs/known-issues.md](docs/known-issues.md) | Known limitations and roadmap |
+| [CHANGELOG.md](CHANGELOG.md) | Version history and changes |
+| [docs/reviews/comprehensive-review-v2-2026-06-17.md](docs/reviews/comprehensive-review-v2-2026-06-17.md) | Comprehensive code review report |
 
 ## Dependencies
 
@@ -88,7 +111,58 @@ const response = await window.wasmCallAPI('getUsers', {
 |---------|---------|
 | `github.com/norunners/vert` | Go ↔ JavaScript value conversion |
 | `gopkg.in/yaml.v3` | OpenAPI YAML parsing |
+| `github.com/urfave/cli/v2` | CLI framework |
+
+## Testing
+
+```bash
+# Run all tests
+make test
+
+# Run tests with race detection
+make test-race
+
+# Run specific package tests
+go test -v ./pkg/generator/
+go test -v ./pkg/runtime/client/
+go test -v ./pkg/runtime/errors/
+go test -v ./pkg/runtime/validate/
+```
+
+## Project Structure
+
+```
+
+go_wasm_lib2/
+├── cmd/generator/          # CLI 入口（6 个文件）
+│   ├── main.go             #   app 装配 + ExitErrHandler
+│   ├── flags.go            #   flag 定义
+│   ├── generate.go         #   runGenerate 核心逻辑
+│   ├── init.go             #   runInit 逻辑
+│   ├── wasm.go             #   runBuildWASM 逻辑
+│   └── lint.go             #   runOxlint 逻辑
+├── cmd/runtime/            # WASM 运行时入口
+├── pkg/generator/          # 代码生成器
+│   ├── generator.go        #   核心生成逻辑
+│   ├── openapi.go          #   OpenAPI 解析
+│   ├── types.go            #   类型定义
+│   ├── go_templates.go     #   Go 模板渲染（预编译）
+│   ├── ts_templates.go     #   TS 模板渲染（预编译）
+│   └── templates/          #   内置模板文件
+├── pkg/runtime/            # WASM 运行时
+│   ├── runtime.go          #   Facade 层
+│   ├── client/             #   HTTP 客户端
+│   ├── errors/             #   错误处理
+│   ├── validate/           #   验证函数
+│   ├── convert/            #   类型转换（js/wasm）
+│   ├── wasm/               #   JS 导出（js/wasm）
+│   └── build/              #   构建工具
+├── docs/                   # 文档目录
+├── .github/workflows/      # CI/CD 配置
+├── Makefile                # Make 构建脚本
+└── Taskfile.yml            # Task 构建脚本
+```
 
 ## License
 
-MIT
+[MIT](LICENSE)

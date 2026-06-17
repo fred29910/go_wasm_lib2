@@ -1,9 +1,10 @@
-package runtime
+package client
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	runtimeerrors "github.com/fred29910/gowasm/pkg/runtime/errors"
 )
 
 // maxResponseBodySize limits response body reads to 10 MB (OOM protection).
@@ -82,6 +85,10 @@ func NewHTTPClient(config *ClientConfig) *HTTPClient {
 		config = DefaultClientConfig()
 	}
 
+	if config.Headers == nil {
+		config.Headers = make(map[string]string)
+	}
+
 	timeout := time.Duration(config.Timeout) * time.Second
 	if timeout == 0 {
 		timeout = 30 * time.Second
@@ -110,21 +117,29 @@ type Response struct {
 	Status  int               `json:"status"`
 	Headers map[string]string `json:"headers"`
 	Body    interface{}       `json:"body"`
-	Error   *WASMError        `json:"error,omitempty"`
+	Error   *runtimeerrors.WASMError        `json:"error,omitempty"`
 }
 
 // Call makes an HTTP request and returns a Response
 func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) {
 	// Build URL with path params
-	fullURL := c.buildURL(req.Path, req.PathParams, req.Query)
+	fullURL, err := c.buildURL(req.Path, req.PathParams, req.Query)
+	if err != nil {
+		return nil, runtimeerrors.WrapWASMError(
+			runtimeerrors.ErrCodeRequestFailed,
+			"Failed to build URL",
+			err,
+			"Check that path parameters do not contain invalid values (e.g. '..', '//', or absolute paths)",
+		)
+	}
 
 	// Serialize body
 	var bodyReader io.Reader
 	if req.Body != nil {
 		bodyBytes, err := json.Marshal(req.Body)
 		if err != nil {
-			return nil, WrapWASMError(
-				ErrCodeSerializationFail,
+			return nil, runtimeerrors.WrapWASMError(
+				runtimeerrors.ErrCodeSerializationFail,
 				"Failed to serialize request body",
 				err,
 				"Ensure the request body contains only JSON-serializable types (string, number, bool, slice, map, struct)",
@@ -136,8 +151,8 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	// Create HTTP request
 	httpReq, err := http.NewRequestWithContext(ctx, req.Method, fullURL, bodyReader)
 	if err != nil {
-		return nil, WrapWASMError(
-			ErrCodeRequestFailed,
+		return nil, runtimeerrors.WrapWASMError(
+			runtimeerrors.ErrCodeRequestFailed,
 			"Failed to create HTTP request",
 			err,
 			"Check that the method is valid (GET, POST, PUT, DELETE, etc.) and the URL is well-formed",
@@ -164,15 +179,15 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	if err != nil {
 		// Check if it's a timeout
 		if urlErr, ok := err.(*url.Error); ok && urlErr.Timeout() {
-			return nil, WrapWASMError(
-				ErrCodeTimeout,
+			return nil, runtimeerrors.WrapWASMError(
+				runtimeerrors.ErrCodeTimeout,
 				"Request timeout",
 				err,
 				fmt.Sprintf("Increase the timeout value in ClientConfig (current: %v seconds)", c.config.Timeout),
 			)
 		}
-		return nil, WrapWASMError(
-			ErrCodeNetworkError,
+		return nil, runtimeerrors.WrapWASMError(
+			runtimeerrors.ErrCodeNetworkError,
 			"Network error",
 			err,
 			"Check network connectivity, verify the BaseURL is correct, and ensure the server is reachable",
@@ -183,8 +198,8 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	// Read response body (capped at 10 MB for OOM protection)
 	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize))
 	if err != nil {
-		return nil, WrapWASMError(
-			ErrCodeRequestFailed,
+		return nil, runtimeerrors.WrapWASMError(
+			runtimeerrors.ErrCodeRequestFailed,
 			"Failed to read response body",
 			err,
 			"The response body may have been corrupted, exceeded 10MB limit, or the connection closed prematurely",
@@ -218,58 +233,78 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 
 var pathParamRe = regexp.MustCompile(`\{([^}]+)\}`)
 
+// ErrInvalidPathParam is returned when a path parameter contains
+// potentially dangerous values (path traversal, absolute paths, etc.).
+var ErrInvalidPathParam = errors.New("invalid path parameter")
+
 // ResolvePath replaces path parameters and appends query parameters.
 // It detects and rejects path traversal attempts (e.g. "..").
 // Uses regex for deterministic, single-pass replacement (avoids map-order injection).
-func ResolvePath(path string, pathParams map[string]string, query url.Values) string {
+// Returns ErrInvalidPathParam when a path parameter contains dangerous values.
+func ResolvePath(path string, pathParams map[string]string, query url.Values) (string, error) {
 	if path == "" {
 		path = "/"
 	}
 
+	var resolveErr error
 	path = pathParamRe.ReplaceAllStringFunc(path, func(match string) string {
 		key := match[1 : len(match)-1]
 		if v, exists := pathParams[key]; exists {
-			return url.PathEscape(safePathParam(v))
+			safe, err := safePathParam(v)
+			if err != nil {
+				resolveErr = fmt.Errorf("%w: %q", ErrInvalidPathParam, v)
+				return match // keep original placeholder on error
+			}
+			return url.PathEscape(safe)
 		}
 		return match
 	})
 
+	if resolveErr != nil {
+		return "", resolveErr
+	}
+
 	if query == nil || len(query) == 0 {
-		return path
+		return path, nil
 	}
 
 	sep := "?"
 	if strings.Contains(path, "?") {
 		sep = "&"
 	}
-	return path + sep + query.Encode()
+	return path + sep + query.Encode(), nil
 }
 
-func safePathParam(v string) string {
+// safePathParam validates and returns a safe path parameter value.
+// Returns an error if the value contains path traversal attempts.
+func safePathParam(v string) (string, error) {
 	unescaped, err := url.PathUnescape(v)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("decode path parameter: %w", err)
 	}
 	if strings.Contains(unescaped, "..") || strings.Contains(unescaped, "//") || strings.HasPrefix(unescaped, "/") {
-		return ""
+		return "", fmt.Errorf("%w: contains dangerous pattern", ErrInvalidPathParam)
 	}
-	return v
+	return v, nil
 }
 
 // buildURL constructs the full URL with path and query parameters using url.JoinPath.
-func (c *HTTPClient) buildURL(path string, pathParams map[string]string, query url.Values) string {
-	resolvedPath := ResolvePath(path, pathParams, query)
+func (c *HTTPClient) buildURL(path string, pathParams map[string]string, query url.Values) (string, error) {
+	resolvedPath, err := ResolvePath(path, pathParams, query)
+	if err != nil {
+		return "", err
+	}
 
 	if c.config.BaseURL == "" {
-		return resolvedPath
+		return resolvedPath, nil
 	}
 
 	finalURL, err := url.JoinPath(c.config.BaseURL, resolvedPath)
 	if err != nil {
 		// Fallback: url.JoinPath should only fail on invalid base URLs
-		return c.config.BaseURL + resolvedPath
+		return c.config.BaseURL + resolvedPath, nil
 	}
-	return finalURL
+	return finalURL, nil
 }
 
 // SetAuthToken sets an authorization header
@@ -289,7 +324,20 @@ func (c *HTTPClient) ClearAuthToken() {
 	delete(c.config.Headers, "Authorization")
 }
 
-// GetConfig returns the current configuration
+// GetConfig returns a copy of the current configuration.
 func (c *HTTPClient) GetConfig() *ClientConfig {
-	return c.config
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	headers := make(map[string]string, len(c.config.Headers))
+	for k, v := range c.config.Headers {
+		headers[k] = v
+	}
+
+	return &ClientConfig{
+		BaseURL:     c.config.BaseURL,
+		Timeout:     c.config.Timeout,
+		Headers:     headers,
+		Credentials: c.config.Credentials,
+	}
 }

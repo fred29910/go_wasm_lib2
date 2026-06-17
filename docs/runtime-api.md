@@ -99,7 +99,7 @@ interface HTTPRequest {
   path: string;                          // 请求路径，如 /users/{id}
   pathParams?: Record<string, string>;   // 路径参数，如 { id: '123' }
   headers?: Record<string, string>;      // 请求头
-  query?: Record<string, string>;         // 查询参数
+  query?: Record<string, string | string[] | number | boolean | null>;         // 查询参数（支持多值）
   body?: any;                            // 请求体（自动 JSON 序列化）
 }
 ```
@@ -318,7 +318,7 @@ interface WASMError {
 | 包含 `//` | `//evil.com` | 路径混淆 |
 | 以 `/` 开头 | `/absolute/path` | 覆盖基础路径 |
 
-> ⚠️ 检测到非法值时返回空字符串（静默抹除）。建议始终调用 `Validate()` 方法验证输入。
+> 检测到非法值时返回错误（`ErrInvalidPathParam`），而非静默抹除。建议始终在调用 API 前验证输入。
 
 ### OOM 防护
 
@@ -415,9 +415,9 @@ flowchart LR
 
     loadBtn.onclick = async () => {
       try {
-        const response = await fetch('./main.wasm');
-        const bytes = await response.arrayBuffer();
-        await WebAssembly.instantiate(bytes);
+        // 确保 wasm_exec.js 已加载（由 WASMSDK.load() 自动处理）
+        const sdk = new WASMSDK('./main.wasm');
+        await sdk.load();
         log('WASM 加载成功');
         initBtn.disabled = false;
       } catch (err) {

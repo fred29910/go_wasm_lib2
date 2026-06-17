@@ -1,6 +1,6 @@
 //go:build js && wasm
 
-package runtime
+package wasm
 
 import (
 	"context"
@@ -10,13 +10,17 @@ import (
 	"strconv"
 	"sync"
 	"syscall/js"
+
+	runtimeclient "github.com/fred29910/gowasm/pkg/runtime/client"
+	runtimeerrors "github.com/fred29910/gowasm/pkg/runtime/errors"
+	runtimeconvert "github.com/fred29910/gowasm/pkg/runtime/convert"
 )
 
 // WASMExports holds the exported functions for JavaScript
 type WASMExports struct {
-	client      *HTTPClient
+	client      *runtimeclient.HTTPClient
 	promise     *PromiseHelper
-	converter   *Converter
+	converter   *runtimeconvert.Converter
 	initialized bool
 	mu          sync.RWMutex
 }
@@ -25,7 +29,7 @@ type WASMExports struct {
 func NewWASMExports() *WASMExports {
 	return &WASMExports{
 		promise:   NewPromiseHelper(),
-		converter: NewConverter(),
+		converter: runtimeconvert.NewConverter(),
 	}
 }
 
@@ -48,8 +52,8 @@ func (e *WASMExports) initClient(this js.Value, args []js.Value) interface{} {
 			defer e.mu.Unlock()
 
 			if len(args) < 1 || args[0].Type() == js.TypeUndefined || args[0].Type() == js.TypeNull {
-				e.promise.RejectPromise(reject, NewContextError(
-					ErrCodeInvalidConfig,
+				e.promise.RejectPromise(reject, runtimeerrors.NewContextError(
+					runtimeerrors.ErrCodeInvalidConfig,
 					"Expected config object",
 					"Received null, undefined, or no arguments",
 					"exports.go",
@@ -62,7 +66,7 @@ func (e *WASMExports) initClient(this js.Value, args []js.Value) interface{} {
 			configJS := args[0]
 
 			// Parse config
-			config := DefaultClientConfig()
+			config := runtimeclient.DefaultClientConfig()
 
 			if baseURL := configJS.Get("baseUrl"); baseURL.Type() == js.TypeString {
 				config.BaseURL = baseURL.String()
@@ -88,7 +92,7 @@ func (e *WASMExports) initClient(this js.Value, args []js.Value) interface{} {
 			}
 
 			// Create client
-			e.client = NewHTTPClient(config)
+			e.client = runtimeclient.NewHTTPClient(config)
 			e.initialized = true
 
 			// Return success
@@ -113,13 +117,13 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 			e.mu.RUnlock()
 
 			if !initialized || client == nil {
-				e.promise.RejectPromise(reject, ErrNotInitialized)
+				e.promise.RejectPromise(reject, runtimeerrors.ErrNotInitialized)
 				return
 			}
 
 			if len(args) < 2 {
-				e.promise.RejectPromise(reject, NewContextError(
-					ErrCodeInvalidOperation,
+				e.promise.RejectPromise(reject, runtimeerrors.NewContextError(
+					runtimeerrors.ErrCodeInvalidOperation,
 					"Expected operationId and request object",
 					fmt.Sprintf("Received %d arguments", len(args)),
 					"exports.go",
@@ -133,7 +137,7 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 			reqJS := args[1]
 
 			// Parse request
-			req := &Request{}
+			req := &runtimeclient.Request{}
 
 			if method := reqJS.Get("method"); method.Type() == js.TypeString {
 				req.Method = method.String()
@@ -184,10 +188,10 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 
 			// Check for registered operation handler first
 			ctx := context.Background()
-			var resp *Response
+			var resp *runtimeclient.Response
 			var err error
 
-			if handler, ok := GetOperation(operationID); ok {
+			if handler, ok := runtimeclient.GetOperation(operationID); ok {
 				resp, err = handler(ctx, *req)
 			} else {
 				resp, err = client.Call(ctx, req)
@@ -201,8 +205,8 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 			// Convert response to JS
 			respJS, err := e.converter.GoToJSValue(resp)
 			if err != nil {
-				e.promise.RejectPromise(reject, NewContextError(
-					ErrCodeSerializationFail,
+				e.promise.RejectPromise(reject, runtimeerrors.NewContextError(
+					runtimeerrors.ErrCodeSerializationFail,
 					"Failed to serialize response to JavaScript",
 					err.Error(),
 					"exports.go",
@@ -227,15 +231,15 @@ func (e *WASMExports) setAuthToken(this js.Value, args []js.Value) interface{} {
 	if !initialized || client == nil {
 		return map[string]interface{}{
 			"success": false,
-			"error":   ErrNotInitialized.Error(),
+			"error":   runtimeerrors.ErrNotInitialized.Error(),
 		}
 	}
 
 	if len(args) < 1 {
 		return map[string]interface{}{
 			"success": false,
-			"error": NewContextError(
-				ErrCodeInvalidOperation,
+			"error": runtimeerrors.NewContextError(
+				runtimeerrors.ErrCodeInvalidOperation,
 				"Expected token argument",
 				"No token provided",
 				"exports.go",
@@ -268,7 +272,7 @@ func (e *WASMExports) clearAuthToken(this js.Value, args []js.Value) interface{}
 	if !initialized || client == nil {
 		return map[string]interface{}{
 			"success": false,
-			"error":   ErrNotInitialized.Error(),
+			"error":   runtimeerrors.ErrNotInitialized.Error(),
 		}
 	}
 
@@ -289,7 +293,7 @@ func (e *WASMExports) getConfig(this js.Value, args []js.Value) interface{} {
 	if !initialized || client == nil {
 		return map[string]interface{}{
 			"success": false,
-			"error":   ErrNotInitialized.Error(),
+			"error":   runtimeerrors.ErrNotInitialized.Error(),
 		}
 	}
 

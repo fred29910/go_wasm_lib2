@@ -110,17 +110,47 @@
 
 ### 2. 查询参数已支持多值（url.Values）
 
-**当前状态**: ✅ 已修复 — `Request.Query` 字段类型为 `url.Values`（即 `map[string][]string`），`exports.go` 使用 `req.Query.Add(k, v)` 添加查询参数，支持同名多值查询。
+**当前状态**: ✅ 已修复 — `Request.Query` 字段类型为 `url.Values`（即 `map[string][]string`），`exports.go` 使用 `req.Query.Add(k, v)` 添加查询参数，支持同名多值查询。TypeScript SDK 接口中 `query` 已更新为 `Record<string, string | string[] | number | boolean | null>`，支持多值查询参数传递。
 
-**保留限制**: TypeScript SDK 接口中 `query` 仍声明为 `Record<string, string>`，JS 侧仅传递单值。如需支持多值查询，需同步修改 `sdk.ts.tmpl`。
+### 3. Promise executor 缺少 panic 恢复
 
-### 3. 请求体仅支持 JSON 序列化
+**文件**: `pkg/runtime/wasm/promise.go`
 
-**文件**: `pkg/runtime/client.go`
+**问题**: `CreatePromise` 中的 executor 函数若发生 panic，会导致 goroutine 崩溃。
 
-**问题**: 所有请求体强制使用 JSON 序列化，不支持 `FormData`、`ArrayBuffer` 等其他格式。
+**状态**: ✅ 已修复 — 新增 `recover()` 保护，panic 被转换为 `fmt.Errorf("panic in WASM promise executor: %v", r)` 并传递给 reject。
 
-**建议**: 允许透传 `ArrayBuffer` 或 `Blob` 类型。
+### 4. Promise rejection 缺少 suggestion/filePath/lineNumber 字段
+
+**文件**: `pkg/runtime/wasm/promise.go`
+
+**问题**: `RejectPromise` 仅传递 `code` 和 `details`，缺少 `suggestion`、`filePath`、`lineNumber` 字段。
+
+**状态**: ✅ 已修复 — `RejectPromise` 现在传递 `WASMError` 的所有字段（`suggestion`、`filePath`、`lineNumber`）。
+
+### 5. datetime validator 手写解析脆弱
+
+**文件**: `pkg/runtime/validate/validator.go`
+
+**问题**: `IsValidDateTime` 使用手写的字节级解析，不支持毫秒、时区缩写等合法 RFC 3339 变体。
+
+**状态**: ✅ 已修复 — 改用 `time.Parse(time.RFC3339, dt)`，覆盖所有合法 RFC 3339 格式。
+
+### 6. CLI -v alias 冲突
+
+**文件**: `cmd/generator/flags.go`
+
+**问题**: `--validation` 的 `-v` alias 与 root 的 `--version` 冲突。
+
+**状态**: ✅ 已修复 — 移除 `--validation` 的 `-v` alias。
+
+### 7. --wasm 默认 true 风险较高
+
+**文件**: `cmd/generator/flags.go`
+
+**问题**: `--wasm` 默认为 `true`，用户可能无意中触发 WASM 编译。
+
+**状态**: ✅ 已修复 — `--wasm` 默认改为 `false`。
 
 ## 🟡 改进项 (P2)
 
@@ -138,10 +168,15 @@
 
 | 包 | 已测试文件 | 未测试文件 |
 |----|-----------|-----------|
-| `pkg/generator/` | `generator_test.go` (1718L), `openapi_test.go` (626L), `types_test.go` (193L) | — |
-| `pkg/runtime/` | `client_test.go` (229L), `build_test.go` (152L) | `converter.go`, `promise.go`, `exports.go`, `validator.go` |
+| `pkg/generator/` | `generator_test.go`, `openapi_test.go`, `types_test.go` | — |
+| `pkg/runtime/client/` | `client_test.go` (224L) | — |
+| `pkg/runtime/build/` | `build_test.go` (154L) | — |
+| `pkg/runtime/errors/` | — | `error.go` |
+| `pkg/runtime/validate/` | — | `validator.go` |
+| `pkg/runtime/convert/` | — | `converter.go` (js/wasm only) |
+| `pkg/runtime/wasm/` | — | `exports.go`, `promise.go` (js/wasm only) |
 
-**风险**: 中风险 — 核心 HTTP 客户端和构建逻辑已有测试覆盖，`validator.go` 的验证函数尚未有独立测试。
+**风险**: 中风险 — 核心 HTTP 客户端、构建逻辑和生成器已有测试覆盖，`validator.go` 的验证函数尚未有独立测试。js/wasm 包因在浏览器环境中运行，难以用标准 Go 测试框架覆盖。
 
 ### 3. 不支持 OpenAPI 高级特性
 
@@ -204,9 +239,8 @@
 
 ### TypeScript SDK 已知问题
 
-1. **WASMSDK.load() 实现**: 当前实现使用 `WebAssembly.instantiate()`，与运行时实际加载方式不匹配
-2. **错误类型**: `wasmCallAPI` 返回 `Promise<HTTPResponse>` 但未处理 WASMError 类型
-3. **查询参数**: TypeScript 接口中 `query` 声明为 `Record<string, string>`，不支持多值查询参数
+1. **错误类型**: `wasmCallAPI` 返回 `Promise<HTTPResponse>` 但未处理 WASMError 类型
+2. **查询参数**: ✅ 已修复 — TypeScript 接口中 `query` 已更新为 `Record<string, string | string[] | number | boolean | null>`，支持多值查询参数
 
 ## 代码评审报告摘要
 
@@ -216,11 +250,11 @@
 |------|------------|------|
 | 架构设计 | 4 | 分层清晰，职责分离良好；已支持 operationId 路由 |
 | 代码质量 | 4 | 核心逻辑可读，已修复全局单例、硬编码行号等问题 |
-| 测试覆盖 | 3 | 核心包已有测试覆盖，validator.go 等文件待补充 |
-| 文档完善 | 4 | 完整 docs/ 文档体系，含评审报告 |
+| 测试覆盖 | 3 | 核心包已有测试覆盖（client/build/generator），validator 等待补充；js/wasm 包难以单元测试 |
+| 文档完善 | 4 | 完整 docs/ 文档体系，含评审报告，已与 CLI 保持一致 |
 | 工程化 | 3 | 构建脚本完善，缺 CI/CD；Taskfile generate 命令需修复 |
 | 安全性 | 4 | 已修复并发、路径遍历、OOM、map 注入等风险 |
-| **综合** | **3.7** | 原型可用，生产需补强测试覆盖和 CI/CD |
+| **综合** | **3.8** | 原型可用，生产需补强测试覆盖和 CI/CD |
 
 ## 修改历史
 

@@ -32,13 +32,15 @@ flowchart TB
         GoCompiler[Go 编译器<br/>2-5MB]
     end
 
-    subgraph Runtime["WASM 运行时 (pkg/runtime)"]
-        Client[HTTP 客户端<br/>client.go<br/>291 行]
-        Exports[JS 导出函数<br/>exports.go<br/>360 行]
-        Converter[类型转换器<br/>converter.go<br/>295 行]
-        Promise[Promise 封装<br/>promise.go<br/>94 行]
-        Error[错误处理<br/>error.go<br/>108 行]
-        Build[构建工具<br/>build.go<br/>137 行]
+    subgraph Runtime["WASM 运行时 (pkg/runtime/)"]
+        RuntimeFacade[Facade 层<br/>runtime.go<br/>81 行]
+        Client[HTTP 客户端<br/>client/client.go<br/>~340 行]
+        Exports[JS 导出函数<br/>wasm/exports.go<br/>~349 行]
+        Converter[类型转换器<br/>convert/converter.go<br/>~295 行]
+        Promise[Promise 封装<br/>wasm/promise.go<br/>~94 行]
+        Error[错误处理<br/>errors/error.go<br/>~138 行]
+        Build[构建工具<br/>build/build.go<br/>~163 行]
+        Validate[验证函数<br/>validate/validator.go<br/>~170 行]
     end
 
     subgraph Lint["代码检查"]
@@ -80,7 +82,12 @@ flowchart TB
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| `main.go` | 348 | CLI 应用入口，定义 `generate`、`init`、`version` 子命令 |
+| `main.go` | 73 | CLI 应用入口，app 装配，ExitErrHandler |
+| `flags.go` | 81 | generate 命令的 flag 定义 |
+| `generate.go` | 131 | runGenerate 逻辑 |
+| `init.go` | 22 | runInit 逻辑 |
+| `wasm.go` | 32 | runBuildWASM 逻辑 |
+| `lint.go` | 34 | runOxlint 逻辑 |
 
 **支持的子命令：**
 
@@ -110,13 +117,16 @@ flowchart TB
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| `client.go` | 295 | HTTP 客户端实现，支持路径参数、查询参数、请求体 |
-| `exports.go` | 349 | JavaScript 导出函数（init/callAPI/auth/getConfig） |
-| `converter.go` | 295 | Go ↔ JavaScript 类型转换（通过 `vert` 库），含原型污染防护 |
-| `promise.go` | 94 | Promise 封装：CreatePromise / ResolvePromise / RejectPromise |
-| `error.go` | 138 | 结构化错误类型，含错误码、文件位置、行号、修复建议，支持 `Unwrap` |
-| `build.go` | 155 | WASM 构建工具（auto/tinygo/go 编译器选择） |
-| `validator.go` | 174 | 共享验证函数（email/uuid/datetime/enum），从模板中抽离以减小 WASM 体积 |
+| `runtime.go` | 81 | Facade 层，重新导出所有子包符号（向后兼容） |
+| `client/client.go` | ~340 | HTTP 客户端实现（含 path param 校验、resolvePath 错误返回） |
+| `client/client_test.go` | ~224 | 客户端测试（resolvePath、nil Headers 保护等） |
+| `errors/error.go` | ~138 | WASMError 类型、错误码、WrapWASMError |
+| `validate/validator.go` | ~170 | 共享验证函数（email/uuid/datetime(RFC3339)/enum） |
+| `convert/converter.go` | ~295 | Go ↔ JavaScript 类型转换（js/wasm only，含原型污染防护） |
+| `wasm/exports.go` | ~349 | JavaScript 导出函数（init/callAPI/auth/getConfig） |
+| `wasm/promise.go` | ~94 | Promise 封装（含 recover 保护、完整错误字段） |
+| `build/build.go` | ~163 | WASM 构建工具（含 context timeout） |
+| `build/build_test.go` | ~154 | 构建测试 |
 
 ### 5. 内置模板 (`pkg/generator/templates/`)
 
@@ -238,12 +248,13 @@ flowchart TB
     end
 
     subgraph WASM["WASM 侧 (Go)"]
-        W1[ExportMain]
-        W2[initClient<br/>初始化 HTTP 客户端]
-        W3[callAPI<br/>执行 HTTP 请求]
-        W4[setAuthToken<br/>设置认证令牌]
-        W5[HTTP Client]
-        W6[vert Converter]
+        W1[ExportMain<br/>cmd/runtime/main.go]
+        W2[wasmInitClient<br/>初始化 HTTP 客户端<br/>wasm/exports.go]
+        W3[wasmCallAPI<br/>执行 HTTP 请求<br/>wasm/exports.go]
+        W4[wasmSetAuthToken<br/>设置认证令牌<br/>wasm/exports.go]
+        W5[HTTP Client<br/>client/client.go]
+        W6[vert Converter<br/>convert/converter.go]
+        W7[Promise Helper<br/>wasm/promise.go]
     end
 
     J1 --> W1
@@ -324,44 +335,56 @@ flowchart TB
 go_wasm_lib2/
 ├── cmd/
 │   ├── generator/
-│   │   └── main.go              # CLI 入口 (348 行)
+│   │   ├── main.go              # CLI 入口 (73 行)
+│   │   ├── flags.go             # Flag 定义 (81 行)
+│   │   ├── generate.go          # runGenerate 逻辑 (131 行)
+│   │   ├── init.go              # runInit 逻辑 (22 行)
+│   │   ├── wasm.go              # runBuildWASM 逻辑 (32 行)
+│   │   └── lint.go              # runOxlint 逻辑 (34 行)
 │   └── runtime/
-│       └── main.go              # WASM 入口 (8 行)
+│       └── main.go              # WASM 入口 (9 行)
 ├── pkg/
 │   ├── generator/
-│   │   ├── generator.go         # 核心生成逻辑 (582 行)
-│   │   ├── openapi.go           # OpenAPI 解析 (191 行)
-│   │   ├── types.go             # 类型定义 (200 行)
-│   │   ├── go_templates.go      # Go 模板渲染 (102 行)
-│   │   ├── ts_templates.go      # TS 模板渲染 (114 行)
-│   │   ├── generator_test.go    # 生成器测试 (1718 行)
-│   │   ├── openapi_test.go      # 解析器测试 (626 行)
-│   │   └── types_test.go        # 类型测试 (193 行)
+│   │   ├── generator.go         # 核心生成逻辑
+│   │   ├── openapi.go           # OpenAPI 解析
+│   │   ├── types.go             # 类型定义
+│   │   ├── go_templates.go      # Go 模板渲染
+│   │   ├── ts_templates.go      # TS 模板渲染
+│   │   ├── generator_test.go    # 生成器测试
+│   │   ├── openapi_test.go      # 解析器测试
+│   │   └── types_test.go        # 类型测试
 │   │   └── templates/           # 模板文件
-│   │       ├── sdk.go.tmpl      # Go 客户端模板 (167 行)
-│   │       ├── sdk.ts.tmpl      # TypeScript SDK 模板 (170 行)
-│   │       ├── go.mod.tmpl       # Go 模块模板 (7 行)
-│   │       ├── index.html.tmpl  # 演示页面模板 (769 行)
-│   │       └── main.go.tmpl     # WASM 入口模板 (11 行)
+│   │       ├── sdk.go.tmpl      # Go 客户端模板
+│   │       ├── sdk.ts.tmpl      # TypeScript SDK 模板
+│   │       ├── go.mod.tmpl      # Go 模块模板
+│   │       ├── index.html.tmpl  # 演示页面模板
+│   │       └── main.go.tmpl     # WASM 入口模板
 │   └── runtime/
-│       ├── client.go            # HTTP 客户端 (295 行)
-│       ├── exports.go           # JS 导出 (349 行)
-│       ├── promise.go           # Promise 封装 (94 行)
-│       ├── converter.go         # 类型转换 (295 行)
-│       ├── error.go             # 错误定义 (138 行)
-│       ├── build.go             # 构建工具 (155 行)
-│       ├── validator.go         # 共享验证函数 (174 行)
-│       ├── build_test.go        # 构建测试 (152 行)
-│       └── client_test.go       # 客户端测试 (229 行)
+│       ├── runtime.go           # Facade 层（重新导出子包符号）
+│       ├── client/
+│       │   ├── client.go        # HTTP 客户端
+│       │   └── client_test.go   # 客户端测试
+│       ├── errors/
+│       │   └── error.go         # WASMError 类型
+│       ├── validate/
+│       │   └── validator.go     # 共享验证函数
+│       ├── convert/
+│       │   └── converter.go     # JS/Go 类型转换 (js/wasm)
+│       ├── wasm/
+│       │   ├── exports.go       # JS 导出函数 (js/wasm)
+│       │   └── promise.go       # Promise 封装 (js/wasm)
+│       └── build/
+│           ├── build.go         # WASM 构建工具
+│           └── build_test.go    # 构建测试
 ├── version/
-│   └── version.go               # 版本信息 (11 行)
+│   └── version.go               # 版本信息
 ├── examples/
-│   ├── petstore/
-│   │   └── openapi.yaml         # Petstore 示例规范
-│   └── templates/               # 自定义模板示例
-├── Makefile                     # Make 构建脚本 (107 行)
-├── Taskfile.yml                 # Task 构建脚本 (194 行)
+│   └── petstore/
+│       ├── openapi.yaml         # Petstore 示例规范
+│       └── generated/           # 生成的示例代码
+├── docs/                        # 文档目录
+├── Makefile                     # Make 构建脚本
+├── Taskfile.yml                 # Task 构建脚本
 ├── go.mod                       # Go 模块定义
-├── package.json                 # npm 配置 (oxlint)
 └── oxlintrc.json                # oxlint 配置
 ```

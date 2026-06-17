@@ -82,11 +82,11 @@ func TestTSType(t *testing.T) {
 
 func TestConfigDefaults(t *testing.T) {
 	cfg := NewConfig()
-	if cfg.ModuleName != "github.com/fred29910/gowasm" {
+	if cfg.ModuleName != "github.com/example/generated-sdk" {
 		t.Errorf("unexpected ModuleName: %s", cfg.ModuleName)
 	}
-	if cfg.OutputModule != "generated-sdk" {
-		t.Errorf("unexpected OutputModule: %s", cfg.OutputModule)
+	if cfg.OutputDir != "./generated" {
+		t.Errorf("unexpected OutputDir: %s", cfg.OutputDir)
 	}
 	if cfg.Package != "generated" {
 		t.Errorf("unexpected Package: %s", cfg.Package)
@@ -101,8 +101,8 @@ func TestNewGeneratorOverrides(t *testing.T) {
 	if g.config.ModuleName != "my/mod" {
 		t.Errorf("ModuleName not overridden: %s", g.config.ModuleName)
 	}
-	if g.config.OutputModule != "my/output" {
-		t.Errorf("OutputModule not overridden: %s", g.config.OutputModule)
+	if g.config.OutputDir != "my/output" {
+		t.Errorf("OutputDir not overridden: %s", g.config.OutputDir)
 	}
 	if g.config.Package != "mypkg" {
 		t.Errorf("Package not overridden: %s", g.config.Package)
@@ -118,7 +118,7 @@ func TestNewGeneratorOverrides(t *testing.T) {
 func TestNewGeneratorFromConfig(t *testing.T) {
 	cfg := &Config{
 		ModuleName:    "custom/mod",
-		OutputModule:  "custom/output",
+		OutputDir:  "custom/output",
 		Package:       "custompkg",
 		RuntimePath:   "/custom/path",
 		RuntimeImport: "custom/runtime",
@@ -130,7 +130,7 @@ func TestNewGeneratorFromConfig(t *testing.T) {
 
 	// nil config should use defaults
 	g2 := NewGeneratorFromConfig(nil)
-	if g2.config.ModuleName != "github.com/fred29910/gowasm" {
+	if g2.config.ModuleName != "github.com/example/generated-sdk" {
 		t.Errorf("nil config should use defaults")
 	}
 }
@@ -373,7 +373,7 @@ func TestBuildOperationResponseTypeMapping(t *testing.T) {
 func TestValidationEnabled(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   true,
 	})
@@ -400,6 +400,7 @@ func TestValidationEnabled(t *testing.T) {
 
 	tmpl, err := template.New("sdk").Funcs(template.FuncMap{
 		"hasPrefix": strings.HasPrefix,
+		"trimPrefix": strings.TrimPrefix,
 	}).Parse(goClientTmpl)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
@@ -430,7 +431,7 @@ func TestValidationEnabled(t *testing.T) {
 func TestValidationDisabled(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   false,
 	})
@@ -457,6 +458,7 @@ func TestValidationDisabled(t *testing.T) {
 
 	tmpl, err := template.New("sdk").Funcs(template.FuncMap{
 		"hasPrefix": strings.HasPrefix,
+		"trimPrefix": strings.TrimPrefix,
 	}).Parse(goClientTmpl)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
@@ -478,7 +480,7 @@ func TestValidationDisabled(t *testing.T) {
 func TestValidationRequiredFields(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   true,
 	})
@@ -511,6 +513,7 @@ func TestValidationRequiredFields(t *testing.T) {
 
 	tmpl, err := template.New("sdk").Funcs(template.FuncMap{
 		"hasPrefix": strings.HasPrefix,
+		"trimPrefix": strings.TrimPrefix,
 	}).Parse(goClientTmpl)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
@@ -529,11 +532,11 @@ func TestValidationRequiredFields(t *testing.T) {
 	if !strings.Contains(output, `return fmt.Errorf("quantity is required")`) {
 		t.Error("expected required field validation for quantity")
 	}
-	if !strings.Contains(output, `if s.Item == ""`) {
-		t.Error("expected string zero-value check for item")
+	if !strings.Contains(output, `if s.Item == nil`) {
+		t.Error("expected nil check for required item")
 	}
-	if !strings.Contains(output, `if s.Quantity == 0`) {
-		t.Error("expected int zero-value check for quantity")
+	if !strings.Contains(output, `if s.Quantity == nil`) {
+		t.Error("expected nil check for required quantity")
 	}
 }
 
@@ -541,7 +544,7 @@ func TestValidationRequiredFields(t *testing.T) {
 func TestValidationEnumFields(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   true,
 	})
@@ -567,6 +570,7 @@ func TestValidationEnumFields(t *testing.T) {
 
 	tmpl, err := template.New("sdk").Funcs(template.FuncMap{
 		"hasPrefix": strings.HasPrefix,
+		"trimPrefix": strings.TrimPrefix,
 	}).Parse(goClientTmpl)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
@@ -591,7 +595,7 @@ func TestValidationEnumFields(t *testing.T) {
 func TestValidationRequestParams(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   true,
 	})
@@ -1090,7 +1094,7 @@ func TestBuildOperationResponseWithoutSchema(t *testing.T) {
 func TestValidationRequiredStringField(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   true,
 	})
@@ -1115,12 +1119,13 @@ func TestValidationRequiredStringField(t *testing.T) {
 	if !schema.Properties[0].Required {
 		t.Error("expected 'name' to be required")
 	}
-	if schema.Properties[0].GoType != "string" {
-		t.Errorf("expected GoType 'string', got %q", schema.Properties[0].GoType)
+	if schema.Properties[0].GoType != "*string" {
+		t.Errorf("expected GoType '*string', got %q", schema.Properties[0].GoType)
 	}
 
 	tmpl, err := template.New("sdk").Funcs(template.FuncMap{
 		"hasPrefix": strings.HasPrefix,
+		"trimPrefix": strings.TrimPrefix,
 	}).Parse(goClientTmpl)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
@@ -1133,19 +1138,19 @@ func TestValidationRequiredStringField(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, `if s.Name == ""`) {
-		t.Error("expected empty string zero-value check for name")
+	if !strings.Contains(output, `if s.Name == nil`) {
+		t.Error("expected nil check for required name")
 	}
 	if !strings.Contains(output, `return fmt.Errorf("name is required")`) {
 		t.Error("expected required field validation error for name")
 	}
 }
 
-// TestValidationRequiredIntField verifies that required integer fields generate zero-value checks.
+// TestValidationRequiredIntField verifies that required integer fields generate nil checks.
 func TestValidationRequiredIntField(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   true,
 	})
@@ -1170,12 +1175,13 @@ func TestValidationRequiredIntField(t *testing.T) {
 	if !schema.Properties[0].Required {
 		t.Error("expected 'count' to be required")
 	}
-	if schema.Properties[0].GoType != "int" {
-		t.Errorf("expected GoType 'int', got %q", schema.Properties[0].GoType)
+	if schema.Properties[0].GoType != "*int" {
+		t.Errorf("expected GoType '*int', got %q", schema.Properties[0].GoType)
 	}
 
 	tmpl, err := template.New("sdk").Funcs(template.FuncMap{
 		"hasPrefix": strings.HasPrefix,
+		"trimPrefix": strings.TrimPrefix,
 	}).Parse(goClientTmpl)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
@@ -1188,19 +1194,19 @@ func TestValidationRequiredIntField(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, `if s.Count == 0`) {
-		t.Error("expected int zero-value check for count")
+	if !strings.Contains(output, `if s.Count == nil`) {
+		t.Error("expected nil check for required count")
 	}
 	if !strings.Contains(output, `return fmt.Errorf("count is required")`) {
 		t.Error("expected required field validation error for count")
 	}
 }
 
-// TestValidationRequiredBoolField verifies that required boolean fields generate false-value checks.
+// TestValidationRequiredBoolField verifies that required boolean fields generate nil checks.
 func TestValidationRequiredBoolField(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   true,
 	})
@@ -1225,12 +1231,13 @@ func TestValidationRequiredBoolField(t *testing.T) {
 	if !schema.Properties[0].Required {
 		t.Error("expected 'active' to be required")
 	}
-	if schema.Properties[0].GoType != "bool" {
-		t.Errorf("expected GoType 'bool', got %q", schema.Properties[0].GoType)
+	if schema.Properties[0].GoType != "*bool" {
+		t.Errorf("expected GoType '*bool', got %q", schema.Properties[0].GoType)
 	}
 
 	tmpl, err := template.New("sdk").Funcs(template.FuncMap{
 		"hasPrefix": strings.HasPrefix,
+		"trimPrefix": strings.TrimPrefix,
 	}).Parse(goClientTmpl)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
@@ -1243,8 +1250,8 @@ func TestValidationRequiredBoolField(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, `if s.Active == false`) {
-		t.Error("expected bool zero-value check for active")
+	if !strings.Contains(output, `if s.Active == nil`) {
+		t.Error("expected nil check for required active")
 	}
 	if !strings.Contains(output, `return fmt.Errorf("active is required")`) {
 		t.Error("expected required field validation error for active")
@@ -1255,7 +1262,7 @@ func TestValidationRequiredBoolField(t *testing.T) {
 func TestValidationEnumField(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   true,
 	})
@@ -1286,6 +1293,7 @@ func TestValidationEnumField(t *testing.T) {
 
 	tmpl, err := template.New("sdk").Funcs(template.FuncMap{
 		"hasPrefix": strings.HasPrefix,
+		"trimPrefix": strings.TrimPrefix,
 	}).Parse(goClientTmpl)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
@@ -1319,7 +1327,7 @@ func TestValidationEnumField(t *testing.T) {
 func TestValidationFormatEmail(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   true,
 	})
@@ -1350,6 +1358,7 @@ func TestValidationFormatEmail(t *testing.T) {
 
 	tmpl, err := template.New("sdk").Funcs(template.FuncMap{
 		"hasPrefix": strings.HasPrefix,
+		"trimPrefix": strings.TrimPrefix,
 	}).Parse(goClientTmpl)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
@@ -1374,7 +1383,7 @@ func TestValidationFormatEmail(t *testing.T) {
 func TestValidationFormatUUID(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   true,
 	})
@@ -1405,6 +1414,7 @@ func TestValidationFormatUUID(t *testing.T) {
 
 	tmpl, err := template.New("sdk").Funcs(template.FuncMap{
 		"hasPrefix": strings.HasPrefix,
+		"trimPrefix": strings.TrimPrefix,
 	}).Parse(goClientTmpl)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
@@ -1429,7 +1439,7 @@ func TestValidationFormatUUID(t *testing.T) {
 func TestValidationFormatDateTime(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   true,
 	})
@@ -1460,6 +1470,7 @@ func TestValidationFormatDateTime(t *testing.T) {
 
 	tmpl, err := template.New("sdk").Funcs(template.FuncMap{
 		"hasPrefix": strings.HasPrefix,
+		"trimPrefix": strings.TrimPrefix,
 	}).Parse(goClientTmpl)
 	if err != nil {
 		t.Fatalf("failed to parse template: %v", err)
@@ -1484,7 +1495,7 @@ func TestValidationFormatDateTime(t *testing.T) {
 func TestGeneratedSchemaValidationFields(t *testing.T) {
 	g := NewGeneratorFromConfig(&Config{
 		ModuleName:   "test/mod",
-		OutputModule: "test/output",
+		OutputDir: "test/output",
 		Package:      "testpkg",
 		Validation:   true,
 	})
@@ -1557,7 +1568,7 @@ func TestIntegrationPetstore(t *testing.T) {
 	// Configure generator
 	cfg := &Config{
 		ModuleName:    "test/petstore",
-		OutputModule:  "petstore-generated",
+		OutputDir:  "petstore-generated",
 		Package:       "generated",
 		RuntimePath:   filepath.Join("..", "..", "pkg", "runtime"),
 		RuntimeImport: "github.com/fred29910/gowasm/pkg/runtime",
@@ -1665,8 +1676,8 @@ func TestIntegrationPetstore(t *testing.T) {
 	if !strings.Contains(goStr, "ID int64") {
 		t.Error("expected Pet.ID to be int64")
 	}
-	if !strings.Contains(goStr, "Name string") {
-		t.Error("expected Pet.Name to be string")
+	if !strings.Contains(goStr, "Name *string") {
+		t.Error("expected Pet.Name to be *string")
 	}
 	if !strings.Contains(goStr, "Status string") {
 		t.Error("expected Pet.Status to be string")

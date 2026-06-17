@@ -15,12 +15,12 @@ import (
 {{range .Schemas}}
 // {{.GoName}} ...
 type {{.GoName}} struct {
-{{range .Properties}}	{{.GoName}} {{.GoType}} `json:"{{.Name}},omitempty"`
+{{range .Properties}}	{{.GoName}} {{.GoType}} `json:"{{.Name}}{{if not .Required}},omitempty{{end}}"`
 {{end}}}
 {{if $.Validation}}
 // Validate validates the {{.GoName}} fields.
 func (s {{.GoName}}) Validate() error {
-{{range .Properties}}{{if .Required}}	if s.{{.GoName}} == {{if eq .GoType "string"}}""{{else if eq .GoType "int"}}0{{else if eq .GoType "int64"}}int64(0){{else if eq .GoType "float64"}}0{{else if eq .GoType "bool"}}false{{else if hasPrefix .GoType "[]"}}nil{{else if hasPrefix .GoType "map["}}nil{{else}}nil{{end}} {
+{{range .Properties}}{{if .Required}}	if s.{{.GoName}} == nil {
 		return fmt.Errorf("{{.Name}} is required")
 	}
 {{end}}{{if .EnumValues}}	if !runtime.IsValidEnum(s.{{.GoName}}, []interface{}{ {{- range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}} }) {
@@ -63,7 +63,7 @@ func (c *APIClient) GetOperation(id string) (runtime.OperationHandler, bool) {
 {{range .Operations}}
 // {{.RequestInterface}} ...
 type {{.RequestInterface}} struct {
-{{range .PathParams}}	{{.GoName}} {{.GoType}} `json:"{{.Name}}"`
+{{range .PathParams}}	{{.GoName}} {{.GoType}} `json:"{{.Name}}{{if not .Required}},omitempty{{end}}"`
 {{end}}{{range .QueryParams}}	{{.GoName}} {{.GoType}} `json:"{{.Name}},omitempty"`
 {{end}}	PathParams map[string]string `json:"pathParams,omitempty"`
 	Query      url.Values        `json:"query,omitempty"`
@@ -74,7 +74,7 @@ type {{.RequestInterface}} struct {
 {{if $.Validation}}
 // Validate validates the {{.RequestInterface}} fields.
 func (r {{.RequestInterface}}) Validate() error {
-{{range .PathParams}}{{if .Required}}	if r.{{.GoName}} == {{if eq .GoType "string"}}""{{else if eq .GoType "int"}}0{{else if eq .GoType "int64"}}int64(0){{else if eq .GoType "float64"}}0{{else if eq .GoType "bool"}}false{{else}}nil{{end}} {
+{{range .PathParams}}{{if .Required}}	if r.{{.GoName}} == nil {
 		return fmt.Errorf("{{.Name}} is required")
 	}
 {{end}}{{if .EnumValues}}	if !runtime.IsValidEnum(r.{{.GoName}}, []interface{}{ {{- range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}} }) {
@@ -83,7 +83,7 @@ func (r {{.RequestInterface}}) Validate() error {
 {{end}}{{if .Format}}	if !{{if eq .Format "email"}}runtime.IsValidEmail{{else if eq .Format "uuid"}}runtime.IsValidUUID{{else if eq .Format "date-time"}}runtime.IsValidDateTime{{else if eq .Format "date"}}runtime.IsValidDateTime{{end}}(r.{{.GoName}}) {
 		return fmt.Errorf("{{.Name}} must be a valid {{.Format}}")
 	}
-{{end}}{{end}}{{range .QueryParams}}{{if .Required}}	if r.{{.GoName}} == {{if eq .GoType "string"}}""{{else if eq .GoType "int"}}0{{else if eq .GoType "int64"}}int64(0){{else if eq .GoType "float64"}}0{{else if eq .GoType "bool"}}false{{else}}nil{{end}} {
+{{end}}{{end}}{{range .QueryParams}}{{if .Required}}	if r.{{.GoName}} == nil {
 		return fmt.Errorf("{{.Name}} is required")
 	}
 {{end}}{{if .EnumValues}}	if !runtime.IsValidEnum(r.{{.GoName}}, []interface{}{ {{- range $i, $v := .EnumValues}}{{if $i}}, {{end}}{{if eq (printf "%T" $v) "string"}}{{printf "%q" $v}}{{else}}{{$v}}{{end}}{{end}} }) {
@@ -107,8 +107,11 @@ type {{.StructName}} struct {
 func {{.RequestInterface}}ToRequest(params {{.RequestInterface}}) runtime.Request {
 	pathParams := make(map[string]string)
 {{if .PathParams}}
-{{range .PathParams}}	pathParams["{{.Name}}"] = {{.GoType}}ToString(params.{{.GoName}})
-{{end}}
+{{range .PathParams}}{{if .Required}}	if params.{{.GoName}} != nil {
+		pathParams["{{.Name}}"] = {{trimPrefix .GoType "*"}}ToString(*params.{{.GoName}})
+	}
+{{else}}	pathParams["{{.Name}}"] = {{.GoType}}ToString(params.{{.GoName}})
+{{end}}{{end}}
 {{end}}	return runtime.Request{
 		Method:     "{{.Method}}",
 		Path:       "{{.Path}}",

@@ -103,6 +103,8 @@ gowasm-generator generate \
   --verbose                      # 显示详细进度
 ```
 
+> **注意**：`--wasm` 默认为 `false`，如需编译 WASM 需显式指定 `--wasm`。
+
 ## 在浏览器中使用
 
 ### 1. 加载 WASM
@@ -119,7 +121,7 @@ gowasm-generator generate \
 
     const sdk = new WASMSDK('./main.wasm');
 
-    // 加载 WASM 模块
+    // 加载 WASM 模块（自动加载 wasm_exec.js 并等待就绪）
     await sdk.load();
 
     // 初始化客户端

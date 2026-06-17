@@ -54,3 +54,4 @@ examples/*/generated/
 .codegraph/.gitignore
 generator
 .sisyphus/
+.agents/

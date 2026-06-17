@@ -74,13 +74,14 @@ type GenerationModel struct {
 ```go
 type Config struct {
     ModuleName     string  // Go 模块名
-    OutputModule   string  // 输出模块路径
+    OutputDir      string  // 输出目录
     Package        string  // Go 包名
     RuntimePath    string  // runtime 模块本地路径
     RuntimeImport  string  // runtime 包导入路径
     Validation     bool    // 是否生成验证方法
     GoTemplatePath string  // 自定义 Go 模板路径
     TSTemplatePath string  // 自定义 TS 模板路径
+    Verbose        bool    // 是否显示详细进度
 }
 ```
 
@@ -167,7 +168,7 @@ type GeneratedResponse struct {
 | 函数 | 签名 | 说明 |
 |------|------|------|
 | `hasPrefix` | `hasPrefix(s, prefix string) bool` | 检查字符串前缀 |
-| `htmlEscape` | `htmlEscape(s string) string` | HTML 实体转义 |
+| `trimPrefix` | `trimPrefix(s, prefix string) string` | 移除字符串前缀（用于 pointer 类型转换） |
 
 ## 生成代码示例
 
@@ -190,14 +191,14 @@ import (
 
 // Schema 结构体
 type Pet struct {
-    ID     int64  `json:"id,omitempty"`
-    Name   string `json:"name"`
-    Status string `json:"status,omitempty"`
+    ID     int64   `json:"id,omitempty"`
+    Name   *string `json:"name"`
+    Status string  `json:"status,omitempty"`
 }
 
 // Request 结构体
 type GetPetByIdRequest struct {
-    PetId      int64             `json:"petId"`
+    PetId      *int64            `json:"petId"`
     PathParams map[string]string `json:"pathParams,omitempty"`
     Query      url.Values        `json:"query,omitempty"`
     Headers    map[string]string `json:"headers,omitempty"`
@@ -211,7 +212,9 @@ type GetPetByIdResponse struct {
 // 请求转换函数
 func GetPetByIdRequestToRequest(params GetPetByIdRequest) runtime.Request {
     pathParams := make(map[string]string)
-    pathParams["petId"] = int64ToString(params.PetId)
+    if params.PetId != nil {
+        pathParams["petId"] = int64ToString(*params.PetId)
+    }
     return runtime.Request{
         Method:     "GET",
         Path:       "/pet/{petId}",
@@ -268,9 +271,9 @@ export interface Pet {
 }
 
 export interface GetPetByIdRequest {
-    petId: number;
+    petId?: number;
     pathParams?: Record<string, string>;
-    query?: Record<string, string>;
+    query?: Record<string, string | string[] | number | boolean | null>;
     headers?: Record<string, string>;
 }
 
@@ -370,21 +373,21 @@ flowchart LR
 
 ```go
 func (r CreatePetRequest) Validate() error {
-    // 检查必填字段
+    // 检查必填字段（pointer nil 检查）
     if r.Body == nil {
-        return fmt.Errorf("body is required")
+        return fmt.Errorf("body is is required")
     }
-    
+
     // 检查枚举值
-    if !isValidEnum(r.Status, []interface{}{"available", "pending", "sold"}) {
+    if !runtime.IsValidEnum(r.Status, []interface{}{"available", "pending", "sold"}) {
         return fmt.Errorf("status must be one of: available, pending, sold")
     }
-    
+
     // 检查格式
-    if !isValidEmail(r.Email) {
+    if !runtime.IsValidEmail(r.Email) {
         return fmt.Errorf("email must be a valid email")
     }
-    
+
     return nil
 }
 ```
@@ -393,12 +396,12 @@ func (r CreatePetRequest) Validate() error {
 
 | 规则 | 说明 | 触发条件 | 实际函数 |
 |------|------|----------|----------|
-| 必填检查 | 确保字段不为零值 | `required: true` | 模板内联检查 |
+| 必填检查 | 确保 pointer 字段不为 nil | `required: true` | 模板内联 `if x == nil` 检查 |
 | 枚举检查 | 确保字段值在允许列表中 | `enum: [...]` | `runtime.IsValidEnum()` |
 | Email 格式 | 基本的 email 格式验证 | `format: email` | `runtime.IsValidEmail()` |
 | UUID 格式 | UUID 格式验证 | `format: uuid` | `runtime.IsValidUUID()` |
-| DateTime 格式 | ISO 8601 日期时间验证 | `format: date-time` | `runtime.IsValidDateTime()` |
-| Date 格式 | ISO 8601 日期验证 | `format: date` | `runtime.IsValidDateTime()` |
+| DateTime 格式 | ISO 8601 / RFC 3339 日期时间验证 | `format: date-time` | `runtime.IsValidDateTime()`（基于 `time.Parse`） |
+| Date 格式 | ISO 8601 / RFC 3339 日期验证 | `format: date` | `runtime.IsValidDateTime()`（基于 `time.Parse`） |
 
 > 验证函数已从模板中抽取到 `pkg/runtime/validator.go`（174 行），作为 `runtime` 包的公开函数使用，避免每个生成的 SDK 重复内联这些函数，从而减小 WASM 体积。
 
@@ -416,10 +419,11 @@ gowasm-generator generate -s openapi.yaml -o ./output --dry-run
 Dry run: files that would be generated:
   generated.go (4523 bytes)
   go.mod (156 bytes)
+  cmd/wasm/main.go (89 bytes)
   sdk.ts (3421 bytes)
   index.html (2156 bytes)
 
-Total: 4 file(s), 10256 bytes
+Total: 5 file(s), 10345 bytes
 ```
 
 ## JSON 输出模式
@@ -432,7 +436,7 @@ Total: 4 file(s), 10256 bytes
   "files": [
     { "path": "generated.go", "size": 4523 },
     { "path": "go.mod", "size": 156 },
-    { "path": "main.go", "size": 89 },
+    { "path": "cmd/wasm/main.go", "size": 89 },
     { "path": "sdk.ts", "size": 3421 },
     { "path": "index.html", "size": 2156 }
   ],

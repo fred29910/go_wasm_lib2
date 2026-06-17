@@ -12,8 +12,8 @@ import (
 // Config holds the configuration for code generation.
 // Use NewConfig to create a Config with sensible defaults.
 type Config struct {
-	ModuleName     string // Go module name for generated code
-	OutputModule   string // Output module path
+	ModuleName     string // Go module name for generated code (used in go.mod)
+	OutputDir      string // Output directory for generated code
 	Package        string // Go package name
 	RuntimePath    string // Local path to the runtime module (for go.mod replace)
 	RuntimeImport  string // Import path of the runtime package
@@ -27,8 +27,8 @@ type Config struct {
 func NewConfig() *Config {
 	cwd, _ := os.Getwd()
 	return &Config{
-		ModuleName:    "github.com/fred29910/gowasm",
-		OutputModule:  "generated-sdk",
+		ModuleName:    "github.com/example/generated-sdk",
+		OutputDir:     "./generated",
 		Package:       "generated",
 		RuntimePath:   cwd,
 		RuntimeImport: "github.com/fred29910/gowasm/pkg/runtime",
@@ -44,13 +44,13 @@ type Generator struct {
 
 // NewGenerator creates a Generator with the given parameters.
 // Empty strings fall back to defaults.
-func NewGenerator(moduleName, outputModule, packageName, runtimePath, runtimeImport string) *Generator {
+func NewGenerator(moduleName, outputDir, packageName, runtimePath, runtimeImport string) *Generator {
 	cfg := NewConfig()
 	if moduleName != "" {
 		cfg.ModuleName = moduleName
 	}
-	if outputModule != "" {
-		cfg.OutputModule = outputModule
+	if outputDir != "" {
+		cfg.OutputDir = outputDir
 	}
 	if packageName != "" {
 		cfg.Package = packageName
@@ -188,6 +188,28 @@ func (g *Generator) GenerateDryRun(specPath, outDir string) (*DryRunResult, erro
 	result.Files = append(result.Files, DryRunFile{
 		Path: "generated.go",
 		Size: len(goContent),
+	})
+
+	// Render go.mod
+	g.progress("Rendering go.mod...")
+	goModContent, err := g.renderGoMod(model)
+	if err != nil {
+		return nil, fmt.Errorf("render go.mod: %w", err)
+	}
+	result.Files = append(result.Files, DryRunFile{
+		Path: "go.mod",
+		Size: len(goModContent),
+	})
+
+	// Render cmd/wasm/main.go
+	g.progress("Rendering main.go...")
+	mainContent, err := g.renderGoMain(model)
+	if err != nil {
+		return nil, fmt.Errorf("render main.go: %w", err)
+	}
+	result.Files = append(result.Files, DryRunFile{
+		Path: "cmd/wasm/main.go",
+		Size: len(mainContent),
 	})
 
 	// Render TypeScript client
@@ -340,20 +362,22 @@ func (g *Generator) buildOperation(op *Operation) GeneratedOperation {
 		}
 	}
 
-	// Capture all responses - first pass: find primary (2xx or first)
+	// Capture all responses - find primary (lowest 2xx, or lowest available)
 	var primaryCode string
+	codes := make([]string, 0, len(op.Responses))
 	for code := range op.Responses {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	for _, code := range codes {
 		if code >= "200" && code < "300" {
 			primaryCode = code
 			break
 		}
 	}
-	// Fallback: use first response if no 2xx found
-	if primaryCode == "" {
-		for code := range op.Responses {
-			primaryCode = code
-			break
-		}
+	// Fallback: use lowest available status code
+	if primaryCode == "" && len(codes) > 0 {
+		primaryCode = codes[0]
 	}
 
 	// Second pass: build response list
@@ -463,24 +487,28 @@ func (g *Generator) goType(schema *Schema, required bool) string {
 		return "map[string]interface{}"
 	}
 
+	baseType := ""
 	switch schema.Type {
 	case "integer":
 		if schema.Format == "int64" {
-			return "int64"
+			baseType = "int64"
+		} else {
+			baseType = "int"
 		}
-		return "int"
 	case "number":
-		return "float64"
+		baseType = "float64"
 	case "boolean":
-		return "bool"
+		baseType = "bool"
 	case "string":
-		if schema.Format == "date-time" || schema.Format == "date" || schema.Format == "byte" {
-			return "string"
-		}
-		return "string"
+		baseType = "string"
 	default:
 		return "interface{}"
 	}
+
+	if required {
+		return "*" + baseType
+	}
+	return baseType
 }
 
 func (g *Generator) tsType(schema *Schema, required bool) string {

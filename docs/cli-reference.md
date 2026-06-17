@@ -10,7 +10,6 @@ gowasm-generator <command> [options]
 |------|------|
 | `generate` | 从 OpenAPI 规范生成 SDK |
 | `init` | 创建示例项目结构 |
-| `version` | 显示版本信息 |
 
 ## generate 命令
 
@@ -55,7 +54,7 @@ gowasm-generator generate [flags]
 
 | 标志 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `--wasm` | bool | `true` | 生成后是否编译 WASM |
+| `--wasm` | bool | `false` | 生成后是否编译 WASM |
 | `--wasm-out` | string | `<out>/main.wasm` | WASM 输出路径 |
 | `--compiler` | string | `auto` | 编译器选择: `auto`, `tinygo`, `go` |
 
@@ -63,7 +62,7 @@ gowasm-generator generate [flags]
 
 | 标志 | 别名 | 类型 | 默认值 | 说明 |
 |------|------|------|--------|------|
-| `--validation` | `-v` | bool | `true` | 是否生成验证方法 |
+| `--validation` | bool | `true` | 是否生成验证方法 |
 
 #### Lint 选项
 

@@ -1,10 +1,13 @@
 //go:build js && wasm
 
-package runtime
+package wasm
 
 import (
 	"errors"
+	"fmt"
 	"syscall/js"
+
+	runtimeerrors "github.com/fred29910/gowasm/pkg/runtime/errors"
 )
 
 // PromiseHelper provides utilities for creating and managing JavaScript Promises
@@ -25,7 +28,16 @@ func (p *PromiseHelper) CreatePromise(executor func(resolve, reject js.Value)) j
 		}
 		resolve := args[0]
 		reject := args[1]
-		executor(resolve, reject)
+
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					p.RejectPromise(reject, fmt.Errorf("panic in WASM promise executor: %v", r))
+				}
+			}()
+			executor(resolve, reject)
+		}()
+
 		return nil
 	})
 	return promiseConstructor.New(handler)
@@ -43,13 +55,22 @@ func (p *PromiseHelper) RejectPromise(reject js.Value, err error) {
 		return
 	}
 
-	var wasmErr *WASMError
+	var wasmErr *runtimeerrors.WASMError
 	if AsWASMError(err, &wasmErr) {
 		// Create a JS Error with our custom properties
 		jsErr := js.Global().Get("Error").New(wasmErr.Message)
 		jsErr.Set("code", wasmErr.Code)
 		if wasmErr.Details != "" {
 			jsErr.Set("details", wasmErr.Details)
+		}
+		if wasmErr.Suggestion != "" {
+			jsErr.Set("suggestion", wasmErr.Suggestion)
+		}
+		if wasmErr.FilePath != "" {
+			jsErr.Set("filePath", wasmErr.FilePath)
+		}
+		if wasmErr.LineNumber > 0 {
+			jsErr.Set("lineNumber", wasmErr.LineNumber)
 		}
 		reject.Invoke(jsErr)
 	} else {
@@ -58,11 +79,11 @@ func (p *PromiseHelper) RejectPromise(reject js.Value, err error) {
 }
 
 // AsWASMError attempts to convert an error to WASMError
-func AsWASMError(err error, target **WASMError) bool {
+func AsWASMError(err error, target **runtimeerrors.WASMError) bool {
 	if err == nil {
 		return false
 	}
-	var wasmErr *WASMError
+	var wasmErr *runtimeerrors.WASMError
 	if errors.As(err, &wasmErr) {
 		*target = wasmErr
 		return true

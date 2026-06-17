@@ -1,6 +1,10 @@
-package runtime
+package validate
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+	"time"
+)
 
 // IsValidEmail performs a basic email format check.
 func IsValidEmail(email string) bool {
@@ -20,19 +24,20 @@ func IsValidEmail(email string) bool {
 		return false
 	}
 	domain := email[atIndex+1:]
-	dotIndex := -1
-	for i, c := range domain {
-		if c == '.' {
-			if dotIndex != -1 {
-				return false
-			}
-			dotIndex = i
-		}
-	}
-	if dotIndex < 1 || dotIndex >= len(domain)-1 {
+	if len(domain) < 3 {
 		return false
 	}
-	return true
+	// Domain must contain at least one dot, not at start or end
+	dotFound := false
+	for i, c := range domain {
+		if c == '.' {
+			if i == 0 || i == len(domain)-1 {
+				return false
+			}
+			dotFound = true
+		}
+	}
+	return dotFound
 }
 
 // IsValidUUID checks if a string is a valid UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).
@@ -66,79 +71,10 @@ func IsValidUUID(uuid string) bool {
 		isValidHex(uuid[24:36])
 }
 
-// IsValidDateTime checks if a string is a valid ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS±ZZ:ZZ).
+// IsValidDateTime checks if a string is a valid ISO 8601 / RFC 3339 datetime.
 func IsValidDateTime(dt string) bool {
-	if len(dt) < 10 {
-		return false
-	}
-	if dt[4] != '-' || dt[7] != '-' {
-		return false
-	}
-	isDigit := func(c byte) bool {
-		return c >= '0' && c <= '9'
-	}
-	for i := 0; i < 4; i++ {
-		if !isDigit(dt[i]) {
-			return false
-		}
-	}
-	for i := 5; i < 7; i++ {
-		if !isDigit(dt[i]) {
-			return false
-		}
-	}
-	for i := 8; i < 10; i++ {
-		if !isDigit(dt[i]) {
-			return false
-		}
-	}
-	if len(dt) == 10 {
-		return true
-	}
-	if dt[10] != 'T' {
-		return false
-	}
-	if len(dt) < 19 {
-		return false
-	}
-	if dt[13] != ':' || dt[16] != ':' {
-		return false
-	}
-	for i := 11; i < 13; i++ {
-		if !isDigit(dt[i]) {
-			return false
-		}
-	}
-	for i := 14; i < 16; i++ {
-		if !isDigit(dt[i]) {
-			return false
-		}
-	}
-	for i := 17; i < 19; i++ {
-		if !isDigit(dt[i]) {
-			return false
-		}
-	}
-	if len(dt) == 19 {
-		return true
-	}
-	if dt[19] == 'Z' {
-		return true
-	}
-	if (dt[19] == '+' || dt[19] == '-') && len(dt) == 25 && dt[22] == ':' {
-		for i := 20; i < 22; i++ {
-			if !isDigit(dt[i]) {
-				return false
-			}
-		}
-		for i := 23; i < 25; i++ {
-			if !isDigit(dt[i]) {
-				return false
-			}
-		}
-		return true
-	}
-	return false
+	_, err := time.Parse(time.RFC3339, dt)
+	return err == nil
 }
 
 // IsValidEnum checks if a value is in the allowed list.
@@ -156,6 +92,14 @@ func IsValidEnum(value interface{}, allowed []interface{}) bool {
 func IsValid(value interface{}) bool {
 	if value == nil {
 		return false
+	}
+	// Use reflect to detect nil slices, maps, channels, etc.
+	rv := reflect.ValueOf(value)
+	switch rv.Kind() {
+	case reflect.Slice, reflect.Map, reflect.Chan, reflect.Ptr, reflect.Interface:
+		if rv.IsNil() {
+			return false
+		}
 	}
 	switch v := value.(type) {
 	case string:
