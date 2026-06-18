@@ -77,6 +77,14 @@ jobs:
           name: coverage
           path: coverage.out
 
+      - name: Generate coverage summary
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          go tool cover -func=coverage.out >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
   # ──────────────────────────────────────────────
   # Job 3: Build WASM (Standard Go)
   # ──────────────────────────────────────────────

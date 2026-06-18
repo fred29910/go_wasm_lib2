@@ -37,6 +37,22 @@ test:
 	go test ./...
 	@echo "All tests passed"
 
+# Run Go tests with race detection
+test-race:
+	go test -race -count=1 ./...
+	@echo "All tests passed (race detection enabled)"
+
+# Run tests with coverage report
+test-cover:
+	go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+	go tool cover -func=coverage.out
+	@echo "Coverage report generated: coverage.out"
+
+# Generate HTML coverage report
+coverage-html: test-cover
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "HTML coverage report: coverage.html"
+
 # Run go vet
 vet:
 	go vet ./...
@@ -86,7 +102,7 @@ verify-tinygo:
 	tinygo version
 
 # Verify full project
-verify: deps build test vet test-compile dev-generate
+verify: deps build test-race vet test-compile dev-generate
 	@echo "=== All verifications passed ==="
 
 # Help
@@ -97,12 +113,17 @@ help:
 	@echo "  build-all      - Build both"
 	@echo "  deps           - Download dependencies"
 	@echo "  clean          - Clean build artifacts"
+	@echo "  test           - Run Go tests"
+	@echo "  test-race      - Run tests with race detection"
+	@echo "  test-cover     - Run tests with coverage report"
+	@echo "  coverage-html  - Generate HTML coverage report"
+	@echo "  vet            - Run go vet"
 	@echo "  lint-ts        - Lint generated TypeScript files with oxlint"
 	@echo "  lint-ts-fix    - Lint and auto-fix generated TypeScript files"
 	@echo "  test-compile   - Test compilation"
 	@echo "  generate       - Generate SDK from OpenAPI spec (SPEC=..., OUT=...)"
 	@echo "  dev-generate   - Generate SDK for petstore example"
-	@echo "  verify         - Full project verification (build, test, generate, lint)"
+	@echo "  verify         - Full project verification (build, test-race, generate)"
 	@echo "  install-tinygo-macos - Install TinyGo on macOS"
 	@echo "  install-tinygo-linux - Install TinyGo on Linux"
 	@echo "  verify-tinygo  - Verify TinyGo installation"
