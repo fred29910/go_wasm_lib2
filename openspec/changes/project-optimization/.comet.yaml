@@ -10,7 +10,7 @@ verify_mode: null
 auto_transition: true
 base_ref: 1bb544d421a079a1cb5fc838a071f77ffcd0188d
 design_doc: docs/superpowers/specs/2026-06-14-project-optimization-design.md
-plan: docs/superpowers/plans/2026-06-14-project-optimization.md
+plan: docs/superpowers/plans/2026-06-19-project-optimization-recovery-plan.md
 verify_result: pending
 verification_report: null
 branch_status: pending

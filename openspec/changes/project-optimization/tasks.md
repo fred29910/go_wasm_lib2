@@ -57,7 +57,7 @@
 - [x] 8.2 Add tests for Go naming in types_test.go
 - [x] 8.3 Add tests for multi-response in generator_test.go
 - [x] 8.4 Add tests for validation generation
-- [ ] 8.5 Add integration test with petstore example
+- [x] 8.5 Add integration test with petstore example
 
 ## 9. Documentation Updates
 
