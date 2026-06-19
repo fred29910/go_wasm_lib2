@@ -12,6 +12,15 @@ A Go-based toolkit for building WebAssembly (WASM) HTTP clients and generating t
 - **Structured Logging** — `log/slog` based logging with key-value output for machine readability
 - **Tested** — 6 test packages with race condition detection (`make test-race`)
 
+### New in Project Optimization
+
+- **TypeScript Enum Union Types** — OpenAPI enum fields generate proper union types (`'available' | 'pending' | 'sold'`) instead of generic `string`
+- **Go Naming Conventions** — Generated code follows Go idioms (`ID`, `URL`, `HTTP`, `JSON`, `API`, `UUID`, `JWT`)
+- **Multi-Response Support** — All documented HTTP response codes generate typed response structs/interfaces (including 4xx and 5xx)
+- **Request Validation** — Optional `Validate() error` methods on request structs check required fields, enum values, and format constraints
+- **Custom Templates** — Override default templates with `--go-template` and `--ts-template` CLI flags
+- **CLI Enhancements** — `--dry-run` previews without generating files; `--verbose` shows detailed progress; `--output json` for CI/CD parsing
+
 ## Quick Start
 
 ```bash
