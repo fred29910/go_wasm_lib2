@@ -2,6 +2,8 @@
 comet_change: project-optimization
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-06-19-project-optimization
+status: final
 ---
 
 # Project Optimization Design Document

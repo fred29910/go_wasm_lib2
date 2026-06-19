@@ -2,6 +2,7 @@
 change: project-optimization
 design-doc: docs/superpowers/specs/2026-06-14-project-optimization-design.md
 base-ref: 05d4b073ee5d7d529f8d5dd6ee4ce5b7905a7a34
+archived-with: 2026-06-19-project-optimization
 ---
 
 # Project Optimization 恢复实施计划
