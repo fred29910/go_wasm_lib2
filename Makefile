@@ -5,22 +5,29 @@
 # Default target
 all: build
 
-# Build with standard Go compiler
+# Build CLI binary
 build:
+	@echo "Building CLI binary..."
+	go build -trimpath -ldflags="-s -w" -o build/gowasm ./cmd/generator
+	@echo "CLI binary built: build/gowasm"
+	@ls -lh build/gowasm
+
+# Build with standard Go compiler (WASM)
+build-wasm:
 	@echo "Building with standard Go compiler..."
 	GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o build/main.wasm ./cmd/runtime
 	@echo "Standard Go WASM built: build/main.wasm"
 	@ls -lh build/main.wasm
 
-# Build with TinyGo compiler (smaller output)
+# Build with TinyGo compiler (smaller WASM output)
 build-tinygo:
 	@echo "Building with TinyGo compiler..."
 	tinygo build -o build/tinymain.wasm -target=wasm ./cmd/runtime
 	@echo "TinyGo WASM built: build/tinymain.wasm"
 	@ls -lh build/tinymain.wasm
 
-# Build both
-build-all: build build-tinygo
+# Build all
+build-all: build build-wasm build-tinygo
 
 # Download dependencies
 deps:
@@ -59,9 +66,11 @@ vet:
 	@echo "go vet passed"
 
 # Test compilation (without running)
-ntest-compile:
+test-compile:
+	go build -trimpath -o /dev/null ./cmd/generator
+	@echo "CLI binary compilation successful"
 	GOOS=js GOARCH=wasm go build -trimpath -o /dev/null ./cmd/runtime
-	@echo "Standard Go compilation successful"
+	@echo "Standard Go WASM compilation successful"
 	tinygo build -o /dev/null -target=wasm ./cmd/runtime 2>/dev/null || echo "TinyGo compilation test skipped (not installed)"
 	@echo "Compilation tests passed"
 
@@ -108,9 +117,10 @@ verify: deps build test-race vet test-compile dev-generate
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  build          - Build with standard Go compiler"
-	@echo "  build-tinygo   - Build with TinyGo compiler (smaller)"
-	@echo "  build-all      - Build both"
+	@echo "  build          - Build CLI binary"
+	@echo "  build-wasm      - Build with standard Go compiler (WASM)"
+	@echo "  build-tinygo   - Build with TinyGo compiler (smaller WASM)"
+	@echo "  build-all      - Build CLI + WASM variants"
 	@echo "  deps           - Download dependencies"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  test           - Run Go tests"

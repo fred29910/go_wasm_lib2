@@ -5,6 +5,7 @@ version: '3'
 
 vars:
   BUILD_DIR: build
+  CLI_BINARY: '{{.BUILD_DIR}}/gowasm'
   WASM_BINARY: '{{.BUILD_DIR}}/main.wasm'
   TINY_WASM_BINARY: '{{.BUILD_DIR}}/tinymain.wasm'
   SPEC: ""
@@ -18,7 +19,19 @@ tasks:
 
   # Build Tasks
   build:
-    desc: Build with standard Go compiler
+    desc: Build CLI binary
+    cmds:
+      - "echo 'Building CLI binary...'"
+      - 'go build -trimpath -ldflags="-s -w" -o {{.CLI_BINARY}} ./cmd/generator'
+      - "echo 'CLI binary built: {{.CLI_BINARY}}'"
+      - "ls -lh {{.CLI_BINARY}}"
+    sources:
+      - '**/*.go'
+    generates:
+      - '{{.CLI_BINARY}}'
+
+  build:wasm:
+    desc: Build with standard Go compiler (WASM)
     env:
       GOOS: js
       GOARCH: wasm
@@ -33,7 +46,7 @@ tasks:
       - '{{.WASM_BINARY}}'
 
   build:tinygo:
-    desc: Build with TinyGo compiler (smaller output)
+    desc: Build with TinyGo compiler (smaller WASM output)
     cmds:
       - "echo 'Building with TinyGo compiler...'"
       - "tinygo build -o {{.TINY_WASM_BINARY}} -target=wasm ./cmd/runtime"
@@ -45,9 +58,10 @@ tasks:
       - '{{.TINY_WASM_BINARY}}'
 
   build:all:
-    desc: Build with both standard Go and TinyGo
+    desc: Build CLI binary + WASM variants
     cmds:
       - task: build
+      - task: build:wasm
       - task: build:tinygo
 
   # Dependency Management
@@ -101,10 +115,12 @@ tasks:
       - "npx oxlint -c oxlintrc.json --no-ignore {{.OUT | default \"examples/petstore/generated\"}} --fix"
 
   test:compile:
-    desc: Test WASM compilation without running
+    desc: Test compilation without running
     cmds:
+      - "go build -trimpath -o /dev/null ./cmd/generator"
+      - "echo 'CLI binary compilation successful'"
       - "GOOS=js GOARCH=wasm go build -trimpath -o /dev/null ./cmd/runtime"
-      - "echo 'Standard Go compilation successful'"
+      - "echo 'Standard Go WASM compilation successful'"
       - "tinygo build -o /dev/null -target=wasm ./cmd/runtime 2>/dev/null || echo 'TinyGo compilation test skipped (not installed)'"
       - "echo 'Compilation tests passed'"
 
@@ -114,6 +130,7 @@ tasks:
       - "echo '=== Verifying project ==='"
       - task: deps
       - task: build
+      - task: build:wasm
       - task: test:compile
       - task: dev:generate
       - task: lint:ts
@@ -175,9 +192,10 @@ tasks:
       - "echo '=== go_wasm_lib2 - Generic WASM HTTP SDK Generator ==='"
       - "echo"
       - "echo 'Build Commands:'"
-      - "echo '  task build              - Build with standard Go'"
-      - "echo '  task build:tinygo       - Build with TinyGo'"
-      - "echo '  task build:all          - Build both'"
+      - "echo '  task build              - Build CLI binary'"
+      - "echo '  task build:wasm         - Build with standard Go (WASM)'"
+      - "echo '  task build:tinygo       - Build with TinyGo (WASM)'"
+      - "echo '  task build:all          - Build CLI + WASM variants'"
       - "echo"
       - "echo 'Code Generation:'"
       - "echo '  task generate SPEC=... OUT=...  - Generate from OpenAPI spec'"
