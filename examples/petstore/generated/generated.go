@@ -16,13 +16,13 @@ import (
 // Pet ...
 type Pet struct {
 	ID int64 `json:"id,omitempty"`
-	Name string `json:"name,omitempty"`
+	Name *string `json:"name"`
 	Status string `json:"status,omitempty"`
 }
 
 // Validate validates the Pet fields.
 func (s Pet) Validate() error {
-	if s.Name == "" {
+	if s.Name == nil {
 		return fmt.Errorf("name is required")
 	}
 	if !runtime.IsValidEnum(s.Status, []interface{}{"available", "pending", "sold" }) {
@@ -144,7 +144,7 @@ func (c *APIClient) FindPetsByStatusRequestCall(ctx context.Context, params Find
 
 // GetPetByIDRequest ...
 type GetPetByIDRequest struct {
-	PetID int64 `json:"petId"`
+	PetID *int64 `json:"petId"`
 	PathParams map[string]string `json:"pathParams,omitempty"`
 	Query      url.Values        `json:"query,omitempty"`
 	Headers    map[string]string `json:"headers,omitempty"`
@@ -153,7 +153,7 @@ type GetPetByIDRequest struct {
 
 // Validate validates the GetPetByIDRequest fields.
 func (r GetPetByIDRequest) Validate() error {
-	if r.PetID == int64(0) {
+	if r.PetID == nil {
 		return fmt.Errorf("petId is required")
 	}
 	return nil
@@ -171,7 +171,9 @@ type GetPetByIDResponse struct {
 func GetPetByIDRequestToRequest(params GetPetByIDRequest) runtime.Request {
 	pathParams := make(map[string]string)
 
-	pathParams["petId"] = int64ToString(params.PetID)
+	if params.PetID != nil {
+		pathParams["petId"] = int64ToString(*params.PetID)
+	}
 
 	return runtime.Request{
 		Method:     "GET",
@@ -197,12 +199,15 @@ func (c *APIClient) registerAll() {
 	c.operations["createPet"] = func(ctx context.Context, req runtime.Request) (*runtime.Response, error) {
 		return c.client.Call(ctx, &req)
 	}
+	runtime.RegisterOperation("createPet", c.operations["createPet"])
 	c.operations["findPetsByStatus"] = func(ctx context.Context, req runtime.Request) (*runtime.Response, error) {
 		return c.client.Call(ctx, &req)
 	}
+	runtime.RegisterOperation("findPetsByStatus", c.operations["findPetsByStatus"])
 	c.operations["getPetById"] = func(ctx context.Context, req runtime.Request) (*runtime.Response, error) {
 		return c.client.Call(ctx, &req)
 	}
+	runtime.RegisterOperation("getPetById", c.operations["getPetById"])
 
 }
 
