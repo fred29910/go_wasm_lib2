@@ -28,12 +28,12 @@ base-ref: 05d4b073ee5d7d529f8d5dd6ee4ce5b7905a7a34
 
 ### Phase 10: 验证
 
-- [ ] 10.1 Run full test suite (go test ./...)
-- [ ] 10.2 Generate petstore SDK and verify output
-- [ ] 10.3 Run oxlint on generated TypeScript
-- [ ] 10.4 Test WASM build with generated code
-- [ ] 10.5 Test dry-run and verbose modes
-- [ ] 10.6 Test custom template override
+- [x] 10.1 Run full test suite (go test ./...)
+- [x] 10.2 Generate petstore SDK and verify output
+- [x] 10.3 Run oxlint on generated TypeScript
+- [x] 10.4 Test WASM build with generated code
+- [x] 10.5 Test dry-run and verbose modes
+- [x] 10.6 Test custom template override
 
 ## 执行顺序
 
