@@ -8,6 +8,7 @@ import (
 	"syscall/js"
 
 	"github.com/norunners/vert"
+	runtimeerrors "github.com/fred29910/gowasm/pkg/runtime/errors"
 )
 
 // Converter handles conversion between JavaScript values and Go structs
@@ -50,8 +51,8 @@ var dangerousJSKeys = map[string]bool{
 // JSValueToMap converts a JavaScript object to a Go map
 func (c *Converter) JSValueToMap(jsVal js.Value) (map[string]interface{}, error) {
 	if jsVal.Type() != js.TypeObject {
-		return nil, NewContextError(
-			ErrCodeDeserializationFail,
+		return nil, runtimeerrors.NewContextError(
+			runtimeerrors.ErrCodeDeserializationFail,
 			"Expected JavaScript object",
 			fmt.Sprintf("Got type %s instead", jsVal.Type().String()),
 			"converter.go",
@@ -104,8 +105,8 @@ func (c *Converter) SliceToJSArray(slice interface{}) js.Value {
 // JSArrayToSlice converts a JavaScript array to a Go slice
 func (c *Converter) JSArrayToSlice(jsVal js.Value, elementType reflect.Type) (interface{}, error) {
 	if jsVal.Type() != js.TypeObject || jsVal.Get("length").Type() == js.TypeUndefined {
-		return nil, NewContextError(
-			ErrCodeDeserializationFail,
+		return nil, runtimeerrors.NewContextError(
+			runtimeerrors.ErrCodeDeserializationFail,
 			"Expected JavaScript array",
 			fmt.Sprintf("Got type %s instead", jsVal.Type().String()),
 			"converter.go",
@@ -127,6 +128,12 @@ func (c *Converter) JSArrayToSlice(jsVal js.Value, elementType reflect.Type) (in
 	}
 
 	return slice.Interface(), nil
+}
+
+// JSValueToInterface converts a JS value to a Go interface{}.
+// This is an exported wrapper around jsValueToInterface for use by other packages.
+func (c *Converter) JSValueToInterface(jsVal js.Value) interface{} {
+	return c.jsValueToInterface(jsVal)
 }
 
 // jsValueToInterface converts a JS value to a Go interface{}
@@ -283,8 +290,8 @@ func (c *Converter) jsValueToReflect(jsVal js.Value, targetType reflect.Type) (r
 		ptr.Elem().Set(elem)
 		return ptr, nil
 	default:
-		return reflect.Value{}, NewContextError(
-			ErrCodeDeserializationFail,
+		return reflect.Value{}, runtimeerrors.NewContextError(
+			runtimeerrors.ErrCodeDeserializationFail,
 			"Unsupported type for conversion",
 			fmt.Sprintf("Cannot convert JavaScript value to Go type %s", targetType.Kind().String()),
 			"converter.go",
