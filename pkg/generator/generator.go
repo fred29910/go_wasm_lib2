@@ -334,6 +334,10 @@ func (g *Generator) buildOperation(op *Operation) GeneratedOperation {
 	}
 
 	for _, p := range op.Parameters {
+		// Guard against nil Schema (e.g. parameters using $ref or no schema field)
+		if p.Schema == nil {
+			continue
+		}
 		param := GeneratedParameter{
 			Name:       p.Name,
 			GoName:     ToGoName(p.Name),
