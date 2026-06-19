@@ -196,13 +196,21 @@ func (c *HTTPClient) Call(ctx context.Context, req *Request) (*Response, error) 
 	defer resp.Body.Close()
 
 	// Read response body (capped at 10 MB for OOM protection)
-	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize))
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize+1))
 	if err != nil {
 		return nil, runtimeerrors.WrapWASMError(
 			runtimeerrors.ErrCodeRequestFailed,
 			"Failed to read response body",
 			err,
 			"The response body may have been corrupted, exceeded 10MB limit, or the connection closed prematurely",
+		)
+	}
+	if len(bodyBytes) > maxResponseBodySize {
+		return nil, runtimeerrors.WrapWASMError(
+			runtimeerrors.ErrCodeRequestFailed,
+			"Response too large",
+			fmt.Errorf("response body exceeded %d bytes", maxResponseBodySize),
+			"The response body exceeds the 10MB limit. Consider using pagination, streaming, or a smaller page size.",
 		)
 	}
 
