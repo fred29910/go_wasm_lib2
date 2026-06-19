@@ -95,16 +95,12 @@ export class WASMSDK {
 		// It must be served alongside main.wasm and loaded before instantiation.
 		await this.loadScript('wasm_exec.js');
 
-		const go = (window as any).Go;
-		if (!go) {
-			throw new Error('Go runtime (wasm_exec.js) not found. Ensure wasm_exec.js is loaded before calling load().');
-		}
-
+		const go = new (window as any).Go();
 		const result = await WebAssembly.instantiateStreaming(
 			fetch(this.wasmUrl),
-			new go.importObject(),
+			go.importObject,
 		);
-		new go.run(result.instance);
+		go.run(result.instance);
 
 		// Wait for WASM ready signal
 		await this.waitForReady();

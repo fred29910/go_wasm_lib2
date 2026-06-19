@@ -137,6 +137,7 @@ func (c *APIClient) registerAll() {
 {{range .Operations}}	c.operations["{{.ID}}"] = func(ctx context.Context, req runtime.Request) (*runtime.Response, error) {
 		return c.client.Call(ctx, &req)
 	}
+	runtime.RegisterOperation("{{.ID}}", c.operations["{{.ID}}"])
 {{end}}
 }
 {{end}}
