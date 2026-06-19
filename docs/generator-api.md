@@ -22,8 +22,8 @@ flowchart LR
 
 | 模板文件 | 行数 | 输出文件 | 用途 |
 |----------|------|----------|------|
-| `sdk.go.tmpl` | 167 | `generated.go` | Go 客户端：schema 结构体、请求/响应类型、验证方法、辅助函数 |
-| `sdk.ts.tmpl` | 170 | `sdk.ts` | TypeScript SDK：接口定义、WASMSDK 类、类型化 API 函数 |
+| `sdk.go.tmpl` | 171 | `generated.go` | Go 客户端：schema 结构体、请求/响应类型、验证方法、辅助函数 |
+| `sdk.ts.tmpl` | 197 | `sdk.ts` | TypeScript SDK：接口定义、WASMSDK 类、类型化 API 函数 |
 | `go.mod.tmpl` | 7 | `go.mod` | Go 模块定义 |
 | `main.go.tmpl` | 11 | `main.go` | WASM 入口文件 |
 | `index.html.tmpl` | 769 | `index.html` | 交互式演示页面（Tailwind CSS） |

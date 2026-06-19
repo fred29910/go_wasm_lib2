@@ -144,32 +144,33 @@ go test -v ./pkg/runtime/validate/
 
 go_wasm_lib2/
 ├── cmd/generator/          # CLI 入口（6 个文件）
-│   ├── main.go             #   app 装配 + ExitErrHandler
-│   ├── flags.go            #   flag 定义
-│   ├── generate.go         #   runGenerate 核心逻辑
-│   ├── init.go             #   runInit 逻辑
-│   ├── wasm.go             #   runBuildWASM 逻辑
-│   └── lint.go             #   runOxlint 逻辑
+│   ├── main.go             #   app 装配 + ExitErrHandler (74 行)
+│   ├── flags.go            #   flag 定义 (80 行)
+│   ├── generate.go         #   runGenerate 核心逻辑 (132 行)
+│   ├── init.go             #   runInit 逻辑 (22 行)
+│   ├── wasm.go             #   runBuildWASM 逻辑 (31 行)
+│   └── lint.go             #   runOxlint 逻辑 (58 行)
 ├── cmd/runtime/            # WASM 运行时入口
 ├── pkg/generator/          # 代码生成器
-│   ├── generator.go        #   核心生成逻辑
-│   ├── openapi.go          #   OpenAPI 解析
-│   ├── types.go            #   类型定义
-│   ├── go_templates.go     #   Go 模板渲染（预编译）
-│   ├── ts_templates.go     #   TS 模板渲染（预编译）
+│   ├── generator.go        #   核心生成逻辑 (614 行)
+│   ├── openapi.go          #   OpenAPI 解析 (408 行)
+│   ├── types.go            #   类型定义 (200 行)
+│   ├── go_templates.go     #   Go 模板渲染（预编译）(172 行)
+│   ├── ts_templates.go     #   TS 模板渲染（预编译）(130 行)
 │   └── templates/          #   内置模板文件
 ├── pkg/runtime/            # WASM 运行时
-│   ├── runtime.go          #   Facade 层
-│   ├── client/             #   HTTP 客户端
-│   ├── errors/             #   错误处理
-│   ├── validate/           #   验证函数
-│   ├── convert/            #   类型转换（js/wasm）
-│   ├── wasm/               #   JS 导出（js/wasm）
-│   └── build/              #   构建工具
+│   ├── runtime.go          #   Facade 层 (93 行)
+│   ├── runtime_wasm.go     #   WASM 导出入口 (88 行)
+│   ├── client/             #   HTTP 客户端 (351 行)
+│   ├── errors/             #   错误处理 (138 行)
+│   ├── validate/           #   验证函数 (118 行)
+│   ├── convert/            #   类型转换（js/wasm）(302 行)
+│   ├── wasm/               #   JS 导出（js/wasm）(353 行)
+│   └── build/              #   构建工具 (164 行)
 ├── docs/                   # 文档目录
 ├── .github/workflows/      # CI/CD 配置
-├── Makefile                # Make 构建脚本
-└── Taskfile.yml            # Task 构建脚本
+├── Makefile                # Make 构建脚本 (129 行)
+└── Taskfile.yml            # Task 构建脚本 (195 行)
 ```
 
 ## Migration Guide: Naming Convention Changes

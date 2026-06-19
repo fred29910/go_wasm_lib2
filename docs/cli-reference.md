@@ -321,19 +321,17 @@ make lint-ts-fix OUT=./output
 Taskfile.yml 提供了跨平台支持：
 
 ```bash
-task build:tinygo       # 构建 WASM (TinyGo)
-task build:all          # 构建所有版本
-task dev:generate       # 生成 Petstore 示例
-task test               # 运行运行测试
-task test:compile       # 测试编译
-task verify             # 完整验证
-task clean              # 清理构建产物
-task lint:ts            # 对生成的 TS 代码运行 oxlint 检查
-task lint:ts:fix        # 对生成的 TS 代码运行 oxlint 并自动修复
+task build           # 构建 WASM (标准 Go)
+task build:tinygo    # 构建 WASM (TinyGo)
+task build:all       # 构建所有版本
+task dev:generate    # 生成 Petstore 示例
+task test            # 运行 Go 单元测试
+task test:compile    # 测试编译
+task verify          # 完整验证
+task clean           # 清理构建产物
+task lint:ts         # 对生成的 TS 代码运行 oxlint 检查
+task lint:ts:fix     # 对生成的 TS 代码运行 oxlint 并自动修复
 
-# ⚠️ 注意：task generate 命令当前使用旧的 CLI 格式（-spec/-out），
-# 实际等价于 go run ./cmd/generator -spec=... -out=...，子命令 "generate" 缺失。
-# 推荐使用 Makefile 的 make generate 或直接运行 gowasm-generator。
+# ⚠️ 注意：task generate 命令需要 SPEC 和 OUT 参数，请直接使用 make generate 或
+# 运行 gowasm-generator generate -s <spec> -o <out>
 ```
-
-> ⚠️ **已知问题**：`task generate` 命令使用了旧的 CLI 标志格式（`-spec=`/`-out=`），未包含 `generate` 子命令。建议使用 `make generate` 或直接运行 `gowasm-generator generate`。
