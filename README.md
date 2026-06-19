@@ -172,6 +172,23 @@ go_wasm_lib2/
 └── Taskfile.yml            # Task 构建脚本
 ```
 
+## Migration Guide: Naming Convention Changes
+
+如果您之前已生成 SDK 代码，升级到当前版本后可能会遇到以下命名变更：
+
+- `Id` → `ID` （Go 字段和类型名）
+- `Url` → `URL`
+- `Http` → `HTTP`
+- `Json` → `JSON`
+- `Api` → `API`
+- `Uuid` → `UUID`
+- `Jwt` → `JWT`
+
+**迁移方法**：
+1. 重新运行生成器：`make generate SPEC=path/to/openapi.yaml OUT=./output`
+2. 对于现有的手写代码，可搜索并替换上述字段名
+3. TypeScript 代码不受影响（仅增强枚举类型生成）
+
 ## License
 
 [MIT](LICENSE)
