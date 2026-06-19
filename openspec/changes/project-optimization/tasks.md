@@ -61,7 +61,7 @@
 
 ## 9. Documentation Updates
 
-- [ ] 9.1 Update README with new features (enums, validation, custom templates)
+- [x] 9.1 Update README with new features (enums, validation, custom templates)
 - [ ] 9.2 Add CLI reference for new flags
 - [ ] 9.3 Add migration guide for naming convention changes
 - [ ] 9.4 Update examples if needed
