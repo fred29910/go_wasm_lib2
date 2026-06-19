@@ -182,7 +182,7 @@ func (e *WASMExports) callAPI(this js.Value, args []js.Value) interface{} {
 
 			if body := reqJS.Get("body"); body.Type() != js.TypeUndefined && body.Type() != js.TypeNull {
 				// Convert body to Go value
-				bodyVal := e.converter.jsValueToInterface(body)
+				bodyVal := e.converter.JSValueToInterface(body)
 				req.Body = bodyVal
 			}
 

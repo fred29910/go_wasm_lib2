@@ -1,16 +1,4 @@
-// Package runtime provides the core runtime for the WASM HTTP SDK generator.
-//
-// This package is a facade that re-exports symbols from its sub-packages
-// to maintain backward compatibility with existing import paths.
-//
-// Sub-packages:
-//   - client: HTTP client, request/response types, operation registry
-//   - errors: WASMError type and error codes
-//   - validate: Email, UUID, DateTime validation
-//   - convert: JS/Go value conversion (js/wasm only)
-//   - wasm: JS exports and Promise helper (js/wasm only)
-//   - build: WASM build orchestration
-//go:build !js || !wasm
+//go:build js && wasm
 
 package runtime
 
@@ -19,7 +7,14 @@ import (
 	"github.com/fred29910/gowasm/pkg/runtime/client"
 	"github.com/fred29910/gowasm/pkg/runtime/errors"
 	"github.com/fred29910/gowasm/pkg/runtime/validate"
+	"github.com/fred29910/gowasm/pkg/runtime/wasm"
 )
+
+// ExportMain is the main entry point for the WASM module.
+// It is only available when building with GOOS=js GOARCH=wasm.
+func ExportMain() {
+	wasm.ExportMain()
+}
 
 // Re-export client types and functions.
 type (
@@ -72,15 +67,15 @@ type (
 )
 
 const (
-	CompilerAuto    = build.CompilerAuto
-	CompilerTinyGo  = build.CompilerTinyGo
-	CompilerGo      = build.CompilerGo
+	CompilerAuto   = build.CompilerAuto
+	CompilerTinyGo = build.CompilerTinyGo
+	CompilerGo     = build.CompilerGo
 )
 
 var (
-	DetectTinyGo  = build.DetectTinyGo
-	BuildWASM     = build.BuildWASM
-	RunModTidy    = build.RunModTidy
+	DetectTinyGo = build.DetectTinyGo
+	BuildWASM    = build.BuildWASM
+	RunModTidy   = build.RunModTidy
 )
 
 // Re-export validate functions.
